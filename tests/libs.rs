@@ -83,9 +83,9 @@ fn string_rep() {
 
 #[test]
 fn string_sub() {
-    assert_eq!(run("echo. string.sub(\"hello\", 1, 3)"), "el\n");       // [1,3) → "el"
-    assert_eq!(run("echo. string.sub(\"hello\", 2)"), "llo\n");         // [2,len) → "llo"
-    assert_eq!(run("echo. string.sub(\"hello\", 1, 4)"), "ell\n");      // [1,4) → "ell"
+    assert_eq!(run("echo. string.sub(\"hello\", 1, 3)"), "el\n");
+    assert_eq!(run("echo. string.sub(\"hello\", 2)"), "llo\n");
+    assert_eq!(run("echo. string.sub(\"hello\", 1, 4)"), "ell\n");
 }
 
 #[test]

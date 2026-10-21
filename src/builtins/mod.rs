@@ -10,16 +10,13 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use crate::value::Value;
+use crate::value::{OrderedKey, StructMap, Value};
 
-/// Регистрирует все встроенные библиотеки в глобальном окружении.
 pub fn register(globals: &mut HashMap<String, (Value, bool)>) {
-    // базовые глобальные
     for name in ["len", "type", "str", "num", "range"] {
         globals.insert(name.to_string(), (Value::Builtin(name), false));
     }
 
-    // модули
     let modules: &[(&str, &[(&str, &str)])] = &[
         ("string", &[
             ("upper", "string.upper"),
@@ -88,9 +85,9 @@ pub fn register(globals: &mut HashMap<String, (Value, bool)>) {
     ];
 
     for (mod_name, fns) in modules {
-        let mut fields = HashMap::new();
+        let mut fields = StructMap::new();
         for (name, full) in *fns {
-            fields.insert(name.to_string(), Value::Builtin(full));
+            fields.insert(OrderedKey(name.to_string()), Value::Builtin(full));
         }
         let s = Value::Struct(Rc::new(RefCell::new(fields)));
         globals.insert(mod_name.to_string(), (s, false));

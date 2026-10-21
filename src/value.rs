@@ -1,9 +1,38 @@
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::cmp::Ordering;
+use std::collections::BTreeMap;
 use std::fmt;
 use std::rc::Rc;
 
 use crate::ast::{Block, Param};
+
+/// Ключ struct. Внутри — всегда строка.
+/// Ord: если обе строки парсятся в i64 — сравниваем как числа, иначе лексикографически.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct OrderedKey(pub String);
+
+impl OrderedKey {
+    pub fn from_str(s: &str) -> OrderedKey {
+        OrderedKey(s.to_string())
+    }
+}
+
+impl Ord for OrderedKey {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match (self.0.parse::<i64>(), other.0.parse::<i64>()) {
+            (Ok(a), Ok(b)) => a.cmp(&b),
+            _ => self.0.cmp(&other.0),
+        }
+    }
+}
+
+impl PartialOrd for OrderedKey {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+pub type StructMap = BTreeMap<OrderedKey, Value>;
 
 #[derive(Clone)]
 pub enum Value {
@@ -12,7 +41,7 @@ pub enum Value {
     Str(String),
     Bool(bool),
     Tuple(Rc<RefCell<Vec<Value>>>),
-    Struct(Rc<RefCell<HashMap<String, Value>>>),
+    Struct(Rc<RefCell<StructMap>>),
     Function(Rc<Function>),
     Builtin(&'static str),
 }
@@ -78,7 +107,10 @@ impl Value {
             }
             Value::Struct(s) => {
                 let b = s.borrow();
-                let parts: Vec<String> = b.iter().map(|(k, v)| format!("{} = {}", k, v.display())).collect();
+                let parts: Vec<String> = b
+                    .iter()
+                    .map(|(k, v)| format!("{} = {}", k.0, v.display()))
+                    .collect();
                 format!("{{ {} }}", parts.join(", "))
             }
             Value::Function(_) => "<функция>".into(),

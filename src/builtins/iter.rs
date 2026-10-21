@@ -1,10 +1,9 @@
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::interpreter::{Interpreter, IResult};
 use crate::messages as msg;
-use crate::value::Value;
+use crate::value::{OrderedKey, StructMap, Value};
 
 pub fn call(interp: &mut Interpreter, name: &str, args: Vec<Value>) -> IResult<Value> {
     match name {
@@ -15,11 +14,9 @@ pub fn call(interp: &mut Interpreter, name: &str, args: Vec<Value>) -> IResult<V
     }
 }
 
-/// Возвращает либо (None, вектор значений) для кортежа,
-/// либо (Some(числовые ключи), вектор значений) для struct-массива.
 enum Coll {
     Tuple(Vec<Value>),
-    Array(Vec<usize>, Vec<Value>),
+    Array(Vec<i64>, Vec<Value>),
 }
 
 fn collect(coll: &Value, fname: &str) -> IResult<Coll> {
@@ -27,17 +24,17 @@ fn collect(coll: &Value, fname: &str) -> IResult<Coll> {
         Value::Tuple(t) => Ok(Coll::Tuple(t.borrow().clone())),
         Value::Struct(s) => {
             let b = s.borrow();
-            let mut keys: Vec<usize> = Vec::with_capacity(b.len());
+            let mut keys: Vec<i64> = Vec::with_capacity(b.len());
             for k in b.keys() {
-                let n: usize = k
-                    .parse()
-                    .map_err(|_| msg::bi_iter_not_array_key(k))?;
-                keys.push(n);
+                match k.0.parse::<i64>() {
+                    Ok(n) => keys.push(n),
+                    Err(_) => return Err(msg::bi_iter_not_array_key(&k.0)),
+                }
             }
             keys.sort();
             let mut vals = Vec::with_capacity(keys.len());
             for k in &keys {
-                vals.push(b[&k.to_string()].clone());
+                vals.push(b[&OrderedKey(k.to_string())].clone());
             }
             Ok(Coll::Array(keys, vals))
         }
@@ -68,10 +65,10 @@ fn call_map(interp: &mut Interpreter, args: Vec<Value>) -> IResult<Value> {
             Ok(Value::Tuple(Rc::new(RefCell::new(out))))
         }
         Coll::Array(keys, vals) => {
-            let mut map = HashMap::new();
+            let mut map = StructMap::new();
             for (k, v) in keys.iter().zip(vals.into_iter()) {
                 let nv = interp.call(f.clone(), vec![v])?;
-                map.insert(k.to_string(), nv);
+                map.insert(OrderedKey(k.to_string()), nv);
             }
             Ok(Value::Struct(Rc::new(RefCell::new(map))))
         }
@@ -96,12 +93,11 @@ fn call_filter(interp: &mut Interpreter, args: Vec<Value>) -> IResult<Value> {
             Ok(Value::Tuple(Rc::new(RefCell::new(out))))
         }
         Coll::Array(_keys, vals) => {
-            // после filter индексы всегда 0..n-1
-            let mut map = HashMap::new();
-            let mut idx = 0usize;
+            let mut map = StructMap::new();
+            let mut idx = 0i64;
             for v in vals {
                 if interp.call(f.clone(), vec![v.clone()])?.truthy() {
-                    map.insert(idx.to_string(), v);
+                    map.insert(OrderedKey(idx.to_string()), v);
                     idx += 1;
                 }
             }

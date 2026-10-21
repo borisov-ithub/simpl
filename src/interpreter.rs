@@ -1,12 +1,11 @@
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::ast::*;
 use crate::builtins;
 use crate::env::{Env, EnvRef};
 use crate::messages as msg;
-use crate::value::{Function, Value};
+use crate::value::{Function, OrderedKey, StructMap, Value};
 
 pub struct Interpreter {
     pub globals: EnvRef,
@@ -95,16 +94,16 @@ impl Interpreter {
             }
 
             Expr::Struct(fields) => {
-                let mut map = HashMap::new();
-                let mut auto = 0usize;
+                let mut map = StructMap::new();
+                let mut auto = 0i64;
                 for f in fields {
                     let v = self.eval_value(&f.value, env)?;
                     let key = match &f.key {
-                        Some(k) => k.clone(),
+                        Some(k) => OrderedKey::from_str(k),
                         None => {
                             let k = auto.to_string();
                             auto += 1;
-                            k
+                            OrderedKey(k)
                         }
                     };
                     map.insert(key, v);
@@ -241,12 +240,9 @@ impl Interpreter {
                     }
                     Value::Struct(s) => {
                         let b = s.borrow();
-                        let mut v: Vec<(Value, Value)> = b
-                            .iter()
-                            .map(|(k, val)| (Value::Str(k.clone()), val.clone()))
-                            .collect();
-                        v.sort_by(|a, b| a.0.display().cmp(&b.0.display()));
-                        v
+                        b.iter()
+                            .map(|(k, v)| (key_to_value(k), v.clone()))
+                            .collect()
                     }
                     other => return Err(msg::rt_forin_bad_iter(other.type_name())),
                 };
@@ -389,10 +385,11 @@ impl Interpreter {
             }
             UseNames::Wildcard => {
                 for (k, v) in &fields {
-                    if g.get(k).is_some() {
-                        return Err(msg::use_name_conflict(k));
+                    let name = &k.0;
+                    if g.get(name).is_some() {
+                        return Err(msg::use_name_conflict(name));
                     }
-                    g.define(k, v.clone(), false);
+                    g.define(name, v.clone(), false);
                 }
                 if let Some(a) = alias {
                     if g.get(a).is_some() {
@@ -403,8 +400,9 @@ impl Interpreter {
             }
             UseNames::Explicit(list) => {
                 for n in list {
+                    let key = OrderedKey::from_str(n);
                     let v = fields
-                        .get(n)
+                        .get(&key)
                         .ok_or_else(|| msg::use_name_not_in_module(n, module))?;
                     if g.get(n).is_some() {
                         return Err(msg::use_name_conflict(n));
@@ -484,11 +482,11 @@ impl Interpreter {
                     .ok_or_else(|| msg::rt_index_out_of_bounds(i, b.len()))
             }
             Value::Struct(s) => {
-                let k = index.display();
+                let key = OrderedKey(to_key_string(&index));
                 let b = s.borrow();
-                b.get(&k)
+                b.get(&key)
                     .cloned()
-                    .ok_or_else(|| msg::rt_field_missing(&k))
+                    .ok_or_else(|| msg::rt_field_missing(&key.0))
             }
             other => Err(msg::rt_index_on_non_collection(other.type_name())),
         }
@@ -497,8 +495,9 @@ impl Interpreter {
     fn field(&self, target: Value, name: &str) -> IResult<Value> {
         match target {
             Value::Struct(s) => {
+                let key = OrderedKey::from_str(name);
                 let b = s.borrow();
-                b.get(name)
+                b.get(&key)
                     .cloned()
                     .ok_or_else(|| msg::rt_field_missing(name))
             }
@@ -557,7 +556,6 @@ impl Interpreter {
     }
 
     fn call_builtin(&mut self, name: &str, args: Vec<Value>) -> IResult<Value> {
-        // базовые глобальные
         match name {
             "len" => return self.call_len(args),
             "type" => return self.call_type(args),
@@ -566,8 +564,6 @@ impl Interpreter {
             "range" => return self.call_range(args),
             _ => {}
         }
-
-        // модули по префиксу
         if let Some(rest) = name.strip_prefix("string.") {
             return builtins::string::call(self, rest, args);
         }
@@ -589,7 +585,6 @@ impl Interpreter {
         if let Some(rest) = name.strip_prefix("datetime.") {
             return builtins::datetime::call(self, rest, args);
         }
-
         Err(msg::bi_unknown(name))
     }
 
@@ -648,6 +643,21 @@ fn as_num(v: &Value, msg_fn: fn(&str) -> String) -> IResult<f64> {
     match v {
         Value::Number(n) => Ok(*n),
         other => Err(msg_fn(other.type_name())),
+    }
+}
+
+pub(crate) fn key_to_value(k: &OrderedKey) -> Value {
+    match k.0.parse::<i64>() {
+        Ok(n) => Value::Number(n as f64),
+        Err(_) => Value::Str(k.0.clone()),
+    }
+}
+
+pub(crate) fn to_key_string(v: &Value) -> String {
+    match v {
+        Value::Str(s) => s.clone(),
+        Value::Number(n) if n.fract() == 0.0 && n.is_finite() => format!("{}", *n as i64),
+        other => other.display(),
     }
 }
 

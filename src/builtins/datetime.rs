@@ -1,12 +1,11 @@
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::rc::Rc;
 
 use chrono::{Datelike, Local, NaiveDateTime, TimeZone, Timelike};
 
 use crate::interpreter::{Interpreter, IResult};
 use crate::messages as msg;
-use crate::value::Value;
+use crate::value::{OrderedKey, StructMap, Value};
 
 pub fn call(_interp: &mut Interpreter, name: &str, args: Vec<Value>) -> IResult<Value> {
     match name {
@@ -23,14 +22,17 @@ fn num_field(v: f64) -> Value {
 }
 
 fn dt_to_struct(dt: &NaiveDateTime) -> Value {
-    let mut map = HashMap::new();
-    map.insert("year".to_string(), num_field(dt.year() as f64));
-    map.insert("month".to_string(), num_field(dt.month() as f64));
-    map.insert("day".to_string(), num_field(dt.day() as f64));
-    map.insert("hour".to_string(), num_field(dt.hour() as f64));
-    map.insert("min".to_string(), num_field(dt.minute() as f64));
-    map.insert("sec".to_string(), num_field(dt.second() as f64));
-    map.insert("wday".to_string(), num_field(dt.weekday().num_days_from_monday() as f64 + 1.0));
+    let mut map = StructMap::new();
+    map.insert(OrderedKey("year".to_string()), num_field(dt.year() as f64));
+    map.insert(OrderedKey("month".to_string()), num_field(dt.month() as f64));
+    map.insert(OrderedKey("day".to_string()), num_field(dt.day() as f64));
+    map.insert(OrderedKey("hour".to_string()), num_field(dt.hour() as f64));
+    map.insert(OrderedKey("min".to_string()), num_field(dt.minute() as f64));
+    map.insert(OrderedKey("sec".to_string()), num_field(dt.second() as f64));
+    map.insert(
+        OrderedKey("wday".to_string()),
+        num_field(dt.weekday().num_days_from_monday() as f64 + 1.0),
+    );
     Value::Struct(Rc::new(RefCell::new(map)))
 }
 
@@ -40,7 +42,7 @@ fn struct_to_dt(v: &Value) -> IResult<NaiveDateTime> {
         other => return Err(msg::bi_bad_type("datetime", "struct", other.type_name())),
     };
     let get = |name: &str| -> IResult<i32> {
-        match s.get(name) {
+        match s.get(&OrderedKey(name.to_string())) {
             Some(Value::Number(n)) => Ok(*n as i32),
             _ => Err(msg::bi_datetime_bad_struct(name)),
         }
@@ -48,9 +50,9 @@ fn struct_to_dt(v: &Value) -> IResult<NaiveDateTime> {
     let y = get("year")?;
     let m = get("month")? as u32;
     let d = get("day")? as u32;
-    let h = if s.contains_key("hour") { get("hour")? as u32 } else { 0 };
-    let mi = if s.contains_key("min") { get("min")? as u32 } else { 0 };
-    let se = if s.contains_key("sec") { get("sec")? as u32 } else { 0 };
+    let h = if s.contains_key(&OrderedKey("hour".to_string())) { get("hour")? as u32 } else { 0 };
+    let mi = if s.contains_key(&OrderedKey("min".to_string())) { get("min")? as u32 } else { 0 };
+    let se = if s.contains_key(&OrderedKey("sec".to_string())) { get("sec")? as u32 } else { 0 };
     chrono::NaiveDate::from_ymd_opt(y, m, d)
         .and_then(|nd| nd.and_hms_opt(h, mi, se))
         .ok_or_else(msg::bi_datetime_bad_timestamp)
@@ -71,7 +73,6 @@ fn call_format(args: Vec<Value>) -> IResult<Value> {
         Value::Str(s) => s.clone(),
         other => return Err(msg::bi_bad_type(fname, "строку формата", other.type_name())),
     };
-    // chrono использует %Y, %m, %d, %H, %M, %S — совпадает с нашим форматом
     Ok(Value::Str(dt.format(&fmt).to_string()))
 }
 

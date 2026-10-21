@@ -1,10 +1,9 @@
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::rc::Rc;
 
-use crate::interpreter::{Interpreter, IResult};
+use crate::interpreter::{key_to_value, to_key_string, Interpreter, IResult};
 use crate::messages as msg;
-use crate::value::Value;
+use crate::value::{OrderedKey, StructMap, Value};
 
 pub fn call(_interp: &mut Interpreter, name: &str, args: Vec<Value>) -> IResult<Value> {
     match name {
@@ -21,21 +20,11 @@ pub fn call(_interp: &mut Interpreter, name: &str, args: Vec<Value>) -> IResult<
     }
 }
 
-fn as_struct(v: &Value, fname: &str) -> IResult<Rc<RefCell<HashMap<String, Value>>>> {
+fn as_struct(v: &Value, fname: &str) -> IResult<Rc<RefCell<StructMap>>> {
     match v {
         Value::Struct(s) => Ok(s.clone()),
         other => Err(msg::bi_bad_type(fname, "struct", other.type_name())),
     }
-}
-
-/// Сортировка ключей: числовые — как числа, иначе — лексикографически.
-fn sorted_keys(map: &HashMap<String, Value>) -> Vec<String> {
-    let mut keys: Vec<String> = map.keys().cloned().collect();
-    keys.sort_by(|a, b| match (a.parse::<i64>(), b.parse::<i64>()) {
-        (Ok(x), Ok(y)) => x.cmp(&y),
-        _ => a.cmp(b),
-    });
-    keys
 }
 
 fn call_keys(args: Vec<Value>) -> IResult<Value> {
@@ -45,8 +34,7 @@ fn call_keys(args: Vec<Value>) -> IResult<Value> {
     }
     let s = as_struct(&args[0], fname)?;
     let b = s.borrow();
-    let keys = sorted_keys(&b);
-    let v: Vec<Value> = keys.into_iter().map(Value::Str).collect();
+    let v: Vec<Value> = b.keys().map(key_to_value).collect();
     Ok(Value::Tuple(Rc::new(RefCell::new(v))))
 }
 
@@ -57,8 +45,7 @@ fn call_values(args: Vec<Value>) -> IResult<Value> {
     }
     let s = as_struct(&args[0], fname)?;
     let b = s.borrow();
-    let keys = sorted_keys(&b);
-    let v: Vec<Value> = keys.into_iter().map(|k| b[&k].clone()).collect();
+    let v: Vec<Value> = b.values().cloned().collect();
     Ok(Value::Tuple(Rc::new(RefCell::new(v))))
 }
 
@@ -69,11 +56,10 @@ fn call_entries(args: Vec<Value>) -> IResult<Value> {
     }
     let s = as_struct(&args[0], fname)?;
     let b = s.borrow();
-    let keys = sorted_keys(&b);
-    let v: Vec<Value> = keys
-        .into_iter()
-        .map(|k| {
-            let pair = vec![Value::Str(k.clone()), b[&k].clone()];
+    let v: Vec<Value> = b
+        .iter()
+        .map(|(k, val)| {
+            let pair = vec![key_to_value(k), val.clone()];
             Value::Tuple(Rc::new(RefCell::new(pair)))
         })
         .collect();
@@ -86,11 +72,8 @@ fn call_has(args: Vec<Value>) -> IResult<Value> {
         return Err(msg::bi_arity(fname, 2, args.len()));
     }
     let s = as_struct(&args[0], fname)?;
-    let k = match &args[1] {
-        Value::Str(s) => s.clone(),
-        other => return Err(msg::bi_bad_type(fname, "ключ-строку", other.type_name())),
-    };
-    let contains = s.borrow().contains_key(&k);
+    let key = OrderedKey(to_key_string(&args[1]));
+    let contains = s.borrow().contains_key(&key);
     Ok(Value::Bool(contains))
 }
 
@@ -114,12 +97,9 @@ fn call_remove(args: Vec<Value>) -> IResult<Value> {
         return Err(msg::bi_arity(fname, 2, args.len()));
     }
     let s = as_struct(&args[0], fname)?;
-    let k = match &args[1] {
-        Value::Str(s) => s.clone(),
-        other => return Err(msg::bi_bad_type(fname, "ключ-строку", other.type_name())),
-    };
+    let key = OrderedKey(to_key_string(&args[1]));
     let mut out = s.borrow().clone();
-    out.remove(&k);
+    out.remove(&key);
     Ok(Value::Struct(Rc::new(RefCell::new(out))))
 }
 
@@ -132,9 +112,9 @@ fn call_from_tuple(args: Vec<Value>) -> IResult<Value> {
         Value::Tuple(t) => t.borrow().clone(),
         other => return Err(msg::bi_bad_type(fname, "кортеж", other.type_name())),
     };
-    let mut map = HashMap::new();
+    let mut map = StructMap::new();
     for (i, v) in t.into_iter().enumerate() {
-        map.insert(i.to_string(), v);
+        map.insert(OrderedKey(i.to_string()), v);
     }
     Ok(Value::Struct(Rc::new(RefCell::new(map))))
 }
@@ -148,7 +128,7 @@ fn call_from_pairs(args: Vec<Value>) -> IResult<Value> {
         Value::Tuple(t) => t.borrow().clone(),
         other => return Err(msg::bi_bad_type(fname, "кортеж", other.type_name())),
     };
-    let mut map = HashMap::new();
+    let mut map = StructMap::new();
     for pair in t {
         let items: Vec<Value> = match &pair {
             Value::Tuple(p) => p.borrow().clone(),
@@ -160,7 +140,7 @@ fn call_from_pairs(args: Vec<Value>) -> IResult<Value> {
                 &format!("кортеж длины {}", items.len()),
             ));
         }
-        let k = items[0].display();
+        let k = OrderedKey(to_key_string(&items[0]));
         let v = items[1].clone();
         map.insert(k, v);
     }
@@ -183,9 +163,9 @@ fn call_zip(args: Vec<Value>) -> IResult<Value> {
     if keys.len() != vals.len() {
         return Err(msg::bi_struct_zip_len_mismatch(fname, keys.len(), vals.len()));
     }
-    let mut map = HashMap::new();
+    let mut map = StructMap::new();
     for (k, v) in keys.into_iter().zip(vals.into_iter()) {
-        map.insert(k.display(), v);
+        map.insert(OrderedKey(to_key_string(&k)), v);
     }
     Ok(Value::Struct(Rc::new(RefCell::new(map))))
 }
