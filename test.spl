@@ -1,0 +1,14 @@
+let greet (name, greeting = "Привет") = greeting ++ ", " ++ name end
+echo. greet("Аня")
+echo. greet("Аня", "Здравствуй")
+
+let inc (x, by = 1) = x + by end
+echo. inc(10)
+echo. inc(10, 5)
+
+let add (a, b = a + 1) = a + b end
+echo. add(3)
+
+let collect (a = 0, *rest) = (a, rest) end
+echo. collect()
+echo. collect(1, 2, 3)

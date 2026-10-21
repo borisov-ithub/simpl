@@ -1,0 +1,28 @@
+{
+    "name": "simpl",
+    "displayName": "Simpl",
+    "description": "Подсветка синтаксиса для учебного языка Simpl",
+    "version": "0.1.0",
+    "publisher": "simpl",
+    "engines": {
+      "vscode": "^1.60.0"
+    },
+    "categories": ["Programming Languages"],
+    "contributes": {
+      "languages": [
+        {
+          "id": "simpl",
+          "aliases": ["Simpl", "simpl"],
+          "extensions": [".spl"],
+          "configuration": "./language-configuration.json"
+        }
+      ],
+      "grammars": [
+        {
+          "language": "simpl",
+          "scopeName": "source.simpl",
+          "path": "./syntaxes/simpl.tmLanguage.json"
+        }
+      ]
+    }
+  }

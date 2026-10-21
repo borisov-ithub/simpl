@@ -1,0 +1,12 @@
+[package]
+name = "simpl"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "simpl"
+path = "src/lib.rs"
+
+[[bin]]
+name = "simpl"
+path = "src/main.rs"
