@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::ast::*;
+use crate::builtins;
 use crate::env::{Env, EnvRef};
 use crate::messages as msg;
 use crate::value::{Function, Value};
@@ -13,14 +14,14 @@ pub struct Interpreter {
 }
 
 #[derive(Debug)]
-enum Flow {
+pub(crate) enum Flow {
     Normal(Value),
     Break,
     Continue,
     Return(Value),
 }
 
-type IResult<T> = Result<T, String>;
+pub(crate) type IResult<T> = Result<T, String>;
 
 impl Interpreter {
     pub fn new() -> Self {
@@ -30,7 +31,6 @@ impl Interpreter {
         }
     }
 
-    /// Забрать накопленный вывод (в UTF-8).
     pub fn take_output(&self) -> String {
         String::from_utf8(self.out.borrow().clone()).unwrap_or_default()
     }
@@ -49,7 +49,7 @@ impl Interpreter {
         Ok(last)
     }
 
-    fn eval_block(&mut self, block: &Block, env: &EnvRef) -> IResult<Flow> {
+    pub(crate) fn eval_block(&mut self, block: &Block, env: &EnvRef) -> IResult<Flow> {
         let mut last = Value::Nil;
         for e in block {
             match self.eval(e, env)? {
@@ -112,11 +112,7 @@ impl Interpreter {
                 Ok(Flow::Normal(Value::Struct(Rc::new(RefCell::new(map)))))
             }
 
-            Expr::Let {
-                name,
-                mutable,
-                value,
-            } => {
+            Expr::Let { name, mutable, value } => {
                 let v = self.eval_value(value, env)?;
                 env.borrow_mut().define(name, v, *mutable);
                 Ok(Flow::Normal(Value::Nil))
@@ -188,10 +184,7 @@ impl Interpreter {
                 self.field(t, name).map(Flow::Normal)
             }
 
-            Expr::If {
-                branches,
-                else_branch,
-            } => {
+            Expr::If { branches, else_branch } => {
                 for (cond, body) in branches {
                     let c = self.eval_value(cond, env)?;
                     if c.truthy() {
@@ -204,13 +197,7 @@ impl Interpreter {
                 Ok(Flow::Normal(Value::Nil))
             }
 
-            Expr::ForNum {
-                var,
-                from,
-                to,
-                step,
-                body,
-            } => {
+            Expr::ForNum { var, from, to, step, body } => {
                 let from_v = self.eval_value(from, env)?;
                 let to_v = self.eval_value(to, env)?;
                 let step_v = match step {
@@ -366,10 +353,76 @@ impl Interpreter {
                 };
                 Ok(Flow::Return(v))
             }
+
+            Expr::Use { module, alias, names } => {
+                self.eval_use(module, alias, names)
+                    .map(|_| Flow::Normal(Value::Nil))
+            }
         }
     }
 
-    fn eval_value(&mut self, expr: &Expr, env: &EnvRef) -> IResult<Value> {
+    fn eval_use(
+        &mut self,
+        module: &str,
+        alias: &Option<String>,
+        names: &UseNames,
+    ) -> Result<(), String> {
+        let m = self
+            .globals
+            .borrow()
+            .get(module)
+            .ok_or_else(|| msg::use_unknown_module(module))?;
+        let fields = match &m {
+            Value::Struct(s) => s.borrow().clone(),
+            _ => return Err(msg::use_unknown_module(module)),
+        };
+
+        let mut g = self.globals.borrow_mut();
+
+        match names {
+            UseNames::AliasOnly => {
+                let a = alias.as_ref().unwrap();
+                if g.get(a).is_some() {
+                    return Err(msg::use_name_conflict(a));
+                }
+                g.define(a, m.clone(), false);
+            }
+            UseNames::Wildcard => {
+                for (k, v) in &fields {
+                    if g.get(k).is_some() {
+                        return Err(msg::use_name_conflict(k));
+                    }
+                    g.define(k, v.clone(), false);
+                }
+                if let Some(a) = alias {
+                    if g.get(a).is_some() {
+                        return Err(msg::use_name_conflict(a));
+                    }
+                    g.define(a, m.clone(), false);
+                }
+            }
+            UseNames::Explicit(list) => {
+                for n in list {
+                    let v = fields
+                        .get(n)
+                        .ok_or_else(|| msg::use_name_not_in_module(n, module))?;
+                    if g.get(n).is_some() {
+                        return Err(msg::use_name_conflict(n));
+                    }
+                    g.define(n, v.clone(), false);
+                }
+                if let Some(a) = alias {
+                    if g.get(a).is_some() {
+                        return Err(msg::use_name_conflict(a));
+                    }
+                    g.define(a, m.clone(), false);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    pub(crate) fn eval_value(&mut self, expr: &Expr, env: &EnvRef) -> IResult<Value> {
         match self.eval(expr, env)? {
             Flow::Normal(v) => Ok(v),
             Flow::Return(_) => Err(msg::rt_return_in_expr()),
@@ -453,7 +506,7 @@ impl Interpreter {
         }
     }
 
-    fn call(&mut self, f: Value, args: Vec<Value>) -> IResult<Value> {
+    pub(crate) fn call(&mut self, f: Value, args: Vec<Value>) -> IResult<Value> {
         match f {
             Value::Function(func) => {
                 let call_env = Env::child(&func.env);
@@ -504,54 +557,90 @@ impl Interpreter {
     }
 
     fn call_builtin(&mut self, name: &str, args: Vec<Value>) -> IResult<Value> {
+        // базовые глобальные
         match name {
-            "len" => {
-                if args.len() != 1 {
-                    return Err(msg::bi_arity("len", 1, args.len()));
-                }
-                match &args[0] {
-                    Value::Str(s) => Ok(Value::Number(s.chars().count() as f64)),
-                    Value::Tuple(t) => Ok(Value::Number(t.borrow().len() as f64)),
-                    Value::Struct(s) => Ok(Value::Number(s.borrow().len() as f64)),
-                    other => Err(msg::bi_len_bad_type(other.type_name())),
-                }
-            }
-            "type" => {
-                if args.len() != 1 {
-                    return Err(msg::bi_arity("type", 1, args.len()));
-                }
-                Ok(Value::Str(args[0].type_name().to_string()))
-            }
-            "str" => {
-                if args.len() != 1 {
-                    return Err(msg::bi_arity("str", 1, args.len()));
-                }
-                Ok(Value::Str(args[0].display()))
-            }
-            "num" => {
-                if args.len() != 1 {
-                    return Err(msg::bi_arity("num", 1, args.len()));
-                }
-                match &args[0] {
-                    Value::Number(n) => Ok(Value::Number(*n)),
-                    Value::Str(s) => s
-                        .parse::<f64>()
-                        .map(Value::Number)
-                        .map_err(|_| msg::bi_num_bad_string(s)),
-                    other => Err(msg::bi_num_bad_type(other.type_name())),
-                }
-            }
-            "range" => {
-                if args.len() != 2 {
-                    return Err(msg::bi_arity("range", 2, args.len()));
-                }
-                let a = as_num(&args[0], msg::rt_arith_bad_type)? as i64;
-                let b = as_num(&args[1], msg::rt_arith_bad_type)? as i64;
-                let v: Vec<Value> = (a..b).map(|i| Value::Number(i as f64)).collect();
-                Ok(Value::Tuple(Rc::new(RefCell::new(v))))
-            }
-            other => Err(msg::bi_unknown(other)),
+            "len" => return self.call_len(args),
+            "type" => return self.call_type(args),
+            "str" => return self.call_str(args),
+            "num" => return self.call_num(args),
+            "range" => return self.call_range(args),
+            _ => {}
         }
+
+        // модули по префиксу
+        if let Some(rest) = name.strip_prefix("string.") {
+            return builtins::string::call(self, rest, args);
+        }
+        if let Some(rest) = name.strip_prefix("math.") {
+            return builtins::math::call(self, rest, args);
+        }
+        if let Some(rest) = name.strip_prefix("iter.") {
+            return builtins::iter::call(self, rest, args);
+        }
+        if let Some(rest) = name.strip_prefix("struct.") {
+            return builtins::struct_::call(self, rest, args);
+        }
+        if let Some(rest) = name.strip_prefix("tuple.") {
+            return builtins::tuple_::call(self, rest, args);
+        }
+        if let Some(rest) = name.strip_prefix("file.") {
+            return builtins::file::call(self, rest, args);
+        }
+        if let Some(rest) = name.strip_prefix("datetime.") {
+            return builtins::datetime::call(self, rest, args);
+        }
+
+        Err(msg::bi_unknown(name))
+    }
+
+    fn call_len(&mut self, args: Vec<Value>) -> IResult<Value> {
+        if args.len() != 1 {
+            return Err(msg::bi_arity("len", 1, args.len()));
+        }
+        match &args[0] {
+            Value::Str(s) => Ok(Value::Number(s.chars().count() as f64)),
+            Value::Tuple(t) => Ok(Value::Number(t.borrow().len() as f64)),
+            Value::Struct(s) => Ok(Value::Number(s.borrow().len() as f64)),
+            other => Err(msg::bi_bad_type("len", "строку, кортеж или struct", other.type_name())),
+        }
+    }
+
+    fn call_type(&mut self, args: Vec<Value>) -> IResult<Value> {
+        if args.len() != 1 {
+            return Err(msg::bi_arity("type", 1, args.len()));
+        }
+        Ok(Value::Str(args[0].type_name().to_string()))
+    }
+
+    fn call_str(&mut self, args: Vec<Value>) -> IResult<Value> {
+        if args.len() != 1 {
+            return Err(msg::bi_arity("str", 1, args.len()));
+        }
+        Ok(Value::Str(args[0].display()))
+    }
+
+    fn call_num(&mut self, args: Vec<Value>) -> IResult<Value> {
+        if args.len() != 1 {
+            return Err(msg::bi_arity("num", 1, args.len()));
+        }
+        match &args[0] {
+            Value::Number(n) => Ok(Value::Number(*n)),
+            Value::Str(s) => s
+                .parse::<f64>()
+                .map(Value::Number)
+                .map_err(|_| msg::bi_bad_type("num", "число", &format!("строку '{}'", s))),
+            other => Err(msg::bi_bad_type("num", "число", other.type_name())),
+        }
+    }
+
+    fn call_range(&mut self, args: Vec<Value>) -> IResult<Value> {
+        if args.len() != 2 {
+            return Err(msg::bi_arity("range", 2, args.len()));
+        }
+        let a = as_num(&args[0], msg::rt_arith_bad_type)? as i64;
+        let b = as_num(&args[1], msg::rt_arith_bad_type)? as i64;
+        let v: Vec<Value> = (a..b).map(|i| Value::Number(i as f64)).collect();
+        Ok(Value::Tuple(Rc::new(RefCell::new(v))))
     }
 }
 

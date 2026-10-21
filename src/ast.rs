@@ -36,6 +36,15 @@ pub enum Expr {
 
     Echo { args: Vec<Expr>, newline: bool },
     Return(Option<Box<Expr>>),
+
+    Use { module: String, alias: Option<String>, names: UseNames },
+}
+
+#[derive(Debug, Clone)]
+pub enum UseNames {
+    Wildcard,
+    Explicit(Vec<String>),
+    AliasOnly,
 }
 
 #[derive(Debug, Clone)]

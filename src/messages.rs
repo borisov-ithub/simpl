@@ -287,6 +287,180 @@ pub fn parse_assign_without_caret(line: usize, col: usize) -> String {
 }
 
 // ============================================================
+// Парсер — use
+// ============================================================
+
+pub fn parse_use_only_top_level(line: usize, col: usize) -> String {
+    format!(
+        "Строка {}:{}: 'use' допустим только на верхнем уровне файла, вне функций и блоков.",
+        line, col
+    )
+}
+
+pub fn parse_use_requires_names(module: &str) -> String {
+    format!(
+        "use {} без скобок и без 'as'.\n\
+         Подсказка: используйте use {} (*), use {} (имя, ...) или use {} as псевдоним.",
+        module, module, module, module
+    )
+}
+
+pub fn parse_use_expected_lparen() -> String {
+    "ожидалась '(' после имени модуля в use".to_string()
+}
+
+pub fn parse_use_expected_rparen() -> String {
+    "ожидалась ')' после списка имён в use".to_string()
+}
+
+pub fn parse_use_expected_name(line: usize, col: usize, found: &str) -> String {
+    format!(
+        "Строка {}:{}: в use ожидалось имя функции, встретилось {}",
+        line, col, found
+    )
+}
+
+pub fn parse_use_expected_module(line: usize, col: usize, found: &str) -> String {
+    format!(
+        "Строка {}:{}: после 'use' ожидалось имя библиотеки, встретилось {}",
+        line, col, found
+    )
+}
+
+// ============================================================
+// Интерпретатор — use
+// ============================================================
+
+pub fn use_unknown_module(name: &str) -> String {
+    format!(
+        "'{}' — неизвестная библиотека.\n\
+         Доступные: string, math, iter, struct, tuple, file, datetime.",
+        name
+    )
+}
+
+pub fn use_name_conflict(name: &str) -> String {
+    format!(
+        "Имя '{}' уже занято в этой области.\n\
+         Подсказка: используйте use ... as псевдоним (имя) или переименуйте переменную.",
+        name
+    )
+}
+
+pub fn use_name_not_in_module(name: &str, module: &str) -> String {
+    format!("В библиотеке '{}' нет функции '{}'.", module, name)
+}
+
+// ============================================================
+// Библиотеки — общие
+// ============================================================
+
+pub fn bi_arity(name: &str, expected: usize, got: usize) -> String {
+    format!("{}() ожидает {} аргумент(а/ов), передано {}", name, expected, got)
+}
+
+pub fn bi_arity_range(name: &str, min: usize, max: usize, got: usize) -> String {
+    format!("{}() ожидает от {} до {} аргументов, передано {}", name, min, max, got)
+}
+
+pub fn bi_bad_type(fname: &str, expected: &str, got: &str) -> String {
+    format!("{}(): ожидалось {}, получено {}", fname, expected, got)
+}
+
+pub fn bi_expected_function(fname: &str, got: &str) -> String {
+    format!("{}(): ожидалась функция, получено {}", fname, got)
+}
+
+pub fn bi_index_out_of_bounds(fname: &str, i: usize, len: usize) -> String {
+    format!("{}(): индекс {} вне длины {}. Индексация с 0.", fname, i, len)
+}
+
+pub fn bi_unknown(name: &str) -> String {
+    format!("Неизвестная встроенная функция: {}", name)
+}
+
+// ============================================================
+// Библиотека string
+// ============================================================
+
+pub fn bi_string_empty_sep() -> String {
+    "string.split(): разделитель не может быть пустой строкой".to_string()
+}
+
+// ============================================================
+// Библиотека math
+// ============================================================
+
+pub fn bi_math_sqrt_negative() -> String {
+    "math.sqrt(): аргумент не может быть отрицательным".to_string()
+}
+
+pub fn bi_math_empty_args() -> String {
+    "math.min()/math.max(): нужен хотя бы один аргумент".to_string()
+}
+
+// ============================================================
+// Библиотека iter
+// ============================================================
+
+pub fn bi_iter_not_array_key(key: &str) -> String {
+    format!(
+        "iter: struct содержит нечисловой ключ '{}'. \
+         map/filter/reduce работают только с struct-массивами (все ключи — числа).\n\
+         Подсказка: используйте struct.values(s) или struct.keys(s) для произвольного struct.",
+        key
+    )
+}
+
+// ============================================================
+// Библиотека struct
+// ============================================================
+
+pub fn bi_struct_from_pairs_bad_elem(fname: &str, got: &str) -> String {
+    format!("{}(): элемент должен быть кортежем из двух элементов, получено {}", fname, got)
+}
+
+pub fn bi_struct_zip_len_mismatch(fname: &str, a: usize, b: usize) -> String {
+    format!("{}(): длины кортежей не совпадают ({} и {})", fname, a, b)
+}
+
+// ============================================================
+// Библиотека tuple
+// ============================================================
+
+pub fn bi_tuple_zip_len_mismatch(fname: &str, a: usize, b: usize) -> String {
+    format!("{}(): длины кортежей не совпадают ({} и {})", fname, a, b)
+}
+
+// ============================================================
+// Библиотека file
+// ============================================================
+
+pub fn bi_file_read_error(path: &str, err: &std::io::Error) -> String {
+    format!("file.read(): не удалось прочитать '{}': {}", path, err)
+}
+
+pub fn bi_file_write_error(path: &str, err: &std::io::Error) -> String {
+    format!("file.write(): не удалось записать '{}': {}", path, err)
+}
+
+pub fn bi_file_append_error(path: &str, err: &std::io::Error) -> String {
+    format!("file.append(): не удалось дописать '{}': {}", path, err)
+}
+
+// ============================================================
+// Библиотека datetime
+// ============================================================
+
+pub fn bi_datetime_bad_timestamp() -> String {
+    "datetime.from_timestamp(): некорректный timestamp".to_string()
+}
+
+pub fn bi_datetime_bad_struct(field: &str) -> String {
+    format!("datetime: поле '{}' должно быть числом", field)
+}
+
+// ============================================================
 // Окружение
 // ============================================================
 
@@ -400,29 +574,7 @@ pub fn rt_call_non_function(got: &str) -> String {
     format!("Нельзя вызвать значение типа {}", got)
 }
 
-// ============================================================
-// Встроенные функции
-// ============================================================
 
-pub fn bi_arity(name: &str, expected: usize, got: usize) -> String {
-    format!("{}() ожидает {} аргумент(а/ов), передано {}", name, expected, got)
-}
-
-pub fn bi_len_bad_type(got: &str) -> String {
-    format!("len() не применим к {}", got)
-}
-
-pub fn bi_num_bad_type(got: &str) -> String {
-    format!("num() не применим к {}", got)
-}
-
-pub fn bi_num_bad_string(s: &str) -> String {
-    format!("num(): '{}' не является числом", s)
-}
-
-pub fn bi_unknown(name: &str) -> String {
-    format!("Неизвестная встроенная функция: {}", name)
-}
 
 // ============================================================
 // Типизированные контексты as_num

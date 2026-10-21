@@ -18,7 +18,11 @@ impl Parser {
         let mut block = Vec::new();
         self.skip_newlines();
         while !self.check(&Token::Eof) {
-            block.push(self.parse_expr()?);
+            if self.check(&Token::Use) {
+                block.push(self.parse_use()?);
+            } else {
+                block.push(self.parse_expr()?);
+            }
             if self.check(&Token::Eof) { break; }
             if self.check(&Token::Newline) { self.skip_newlines(); }
             else {
@@ -71,10 +75,56 @@ impl Parser {
         while self.check(&Token::Newline) { self.advance(); }
     }
 
+    fn parse_use(&mut self) -> PResult<Expr> {
+        let (line, col) = self.loc();
+        self.expect(&Token::Use, "ожидалось 'use'")?;
+        let module = match self.advance() {
+            Token::Ident(s) => s,
+            other => return Err(msg::parse_use_expected_module(line, col, &format!("{:?}", other))),
+        };
+        let alias = if self.match_tok(&Token::As) {
+            match self.advance() {
+                Token::Ident(s) => Some(s),
+                other => return Err(msg::parse_use_expected_module(line, col, &format!("{:?}", other))),
+            }
+        } else {
+            None
+        };
+        let names = if self.match_tok(&Token::LParen) {
+            if self.match_tok(&Token::Star) {
+                self.expect(&Token::RParen, &msg::parse_use_expected_rparen())?;
+                UseNames::Wildcard
+            } else {
+                let mut list = Vec::new();
+                loop {
+                    match self.advance() {
+                        Token::Ident(s) => list.push(s),
+                        other => {
+                            let (l, c) = self.loc();
+                            return Err(msg::parse_use_expected_name(l, c, &format!("{:?}", other)));
+                        }
+                    }
+                    if !self.match_tok(&Token::Comma) { break; }
+                }
+                self.expect(&Token::RParen, &msg::parse_use_expected_rparen())?;
+                UseNames::Explicit(list)
+            }
+        } else if alias.is_some() {
+            UseNames::AliasOnly
+        } else {
+            return Err(msg::parse_use_requires_names(&module));
+        };
+        Ok(Expr::Use { module, alias, names })
+    }
+
     fn parse_block_until(&mut self, stops: &[Token]) -> PResult<Block> {
         let mut block = Vec::new();
         self.skip_newlines();
         loop {
+            if self.check(&Token::Use) {
+                let (l, c) = self.loc();
+                return Err(msg::parse_use_only_top_level(l, c));
+            }
             if stops.iter().any(|s| self.check(s)) || self.check(&Token::Eof) { break; }
             block.push(self.parse_expr()?);
             if stops.iter().any(|s| self.check(s)) { break; }
@@ -88,6 +138,10 @@ impl Parser {
     }
 
     pub fn parse_expr(&mut self) -> PResult<Expr> {
+        if self.check(&Token::Use) {
+            let (l, c) = self.loc();
+            return Err(msg::parse_use_only_top_level(l, c));
+        }
         if self.check(&Token::Let) { return self.parse_let(); }
         if self.check(&Token::Return) {
             self.advance();
