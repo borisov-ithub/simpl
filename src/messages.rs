@@ -639,3 +639,57 @@ pub fn cli_usage() -> String {
 pub fn cli_read_error(path: &str, err: &std::io::Error) -> String {
     format!("Не удалось прочитать файл '{}': {}", path, err)
 }
+
+pub fn cli_version(version: &str) -> String {
+    format!("simpl {}", version)
+}
+
+pub fn cli_help() -> String {
+    "\
+Использование: simpl [опции] [файл.spl]
+
+Опции:
+  -h, --help       Показать эту справку
+  -v, --version    Показать версию
+  -c, --check      Проверить синтаксис файла без выполнения
+  -r, --repl       Интерактивная среда (пока не реализована)
+
+Примеры:
+  simpl program.spl
+  simpl --check program.spl
+  simpl -v
+"
+    .to_string()
+}
+
+pub fn cli_repl_not_implemented() -> String {
+    "REPL пока не реализован. Будет добавлен в следующих версиях.".to_string()
+}
+
+pub fn cli_missing_file() -> String {
+    "Не указан файл. Используйте simpl --help для справки.".to_string()
+}
+
+pub fn cli_unknown_flag(flag: &str) -> String {
+    format!("Неизвестная опция '{}'. Используйте simpl --help для справки.", flag)
+}
+
+pub fn cli_too_many_files() -> String {
+    "Указано больше одного файла. simpl принимает один файл.".to_string()
+}
+
+pub fn cli_check_ok(path: &str) -> String {
+    format!("{}: синтаксис в порядке", path)
+}
+
+// ============================================================
+// input
+// ============================================================
+
+pub fn input_prompt(prompt: &str) -> String {
+    prompt.to_string()
+}
+
+pub fn input_read_error(err: &std::io::Error) -> String {
+    format!("input(): не удалось прочитать строку: {}", err)
+}

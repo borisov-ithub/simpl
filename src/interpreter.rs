@@ -562,6 +562,7 @@ impl Interpreter {
             "str" => return self.call_str(args),
             "num" => return self.call_num(args),
             "range" => return self.call_range(args),
+            "input" => return self.call_input(args),
             _ => {}
         }
         if let Some(rest) = name.strip_prefix("string.") {
@@ -636,6 +637,39 @@ impl Interpreter {
         let b = as_num(&args[1], msg::rt_arith_bad_type)? as i64;
         let v: Vec<Value> = (a..b).map(|i| Value::Number(i as f64)).collect();
         Ok(Value::Tuple(Rc::new(RefCell::new(v))))
+    }
+
+    fn call_input(&mut self, args: Vec<Value>) -> IResult<Value> {
+        if args.len() > 1 {
+            return Err(msg::bi_arity_range("input", 0, 1, args.len()));
+        }
+        let prompt = if args.len() == 1 {
+            match &args[0] {
+                Value::Str(s) => s.clone(),
+                other => return Err(msg::bi_bad_type("input", "строку-приглашение", other.type_name())),
+            }
+        } else {
+            String::new()
+        };
+    
+        if !prompt.is_empty() {
+            print!("{}", msg::input_prompt(&prompt));
+            use std::io::Write;
+            let _ = std::io::stdout().flush();
+        }
+    
+        let mut line = String::new();
+        std::io::stdin()
+            .read_line(&mut line)
+            .map_err(|e| msg::input_read_error(&e))?;
+        // убираем завершающий \n и \r\n
+        if line.ends_with('\n') {
+            line.pop();
+            if line.ends_with('\r') {
+                line.pop();
+            }
+        }
+        Ok(Value::Str(line))
     }
 }
 

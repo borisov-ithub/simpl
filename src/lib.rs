@@ -26,3 +26,11 @@ pub fn run_source_capture(src: &str) -> Result<String, String> {
     interp.run(&program)?;
     Ok(interp.take_output())
 }
+
+pub fn check_source(src: &str) -> Result<(), String> {
+    let mut lexer = lexer::Lexer::new(src);
+    let tokens = lexer.tokenize()?;
+    let mut parser = parser::Parser::new(tokens);
+    let _program = parser.parse_program()?;
+    Ok(())
+}

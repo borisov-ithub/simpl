@@ -13,7 +13,7 @@ use std::rc::Rc;
 use crate::value::{OrderedKey, StructMap, Value};
 
 pub fn register(globals: &mut HashMap<String, (Value, bool)>) {
-    for name in ["len", "type", "str", "num", "range"] {
+    for name in ["len", "type", "str", "num", "range", "input"] {
         globals.insert(name.to_string(), (Value::Builtin(name), false));
     }
 
