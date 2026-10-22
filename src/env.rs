@@ -21,6 +21,18 @@ impl Env {
         Rc::new(RefCell::new(Self { vars: HashMap::new(), parent: Some(parent.clone()) }))
     }
 
+    /// Объявление переменной с проверкой: ошибка, если имя уже есть **в этой области**.
+    /// Затенение переменной из родительской области разрешено.
+    pub fn define_new(&mut self, name: &str, value: Value, mutable: bool) -> Result<(), String> {
+        if self.vars.contains_key(name) {
+            return Err(msg::env_var_already_defined(name));
+        }
+        self.vars.insert(name.to_string(), (value, mutable));
+        Ok(())
+    }
+
+    /// Объявление без проверки — для встроенных имён, параметров функций и
+    /// внутренних нужд, где перезапись невозможна или допустима.
     pub fn define(&mut self, name: &str, value: Value, mutable: bool) {
         self.vars.insert(name.to_string(), (value, mutable));
     }

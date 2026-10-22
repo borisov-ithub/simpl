@@ -121,7 +121,7 @@ impl Interpreter {
 
             Expr::Let { name, mutable, value } => {
                 let v = self.eval_value(value, env)?;
-                env.borrow_mut().define(name, v, *mutable);
+                env.borrow_mut().define_new(name, v, *mutable)?;
                 Ok(Flow::Normal(Value::Nil))
             }
 
@@ -135,7 +135,7 @@ impl Interpreter {
                     return Err(msg::rt_too_many_args(names.len(), items.len()));
                 }
                 for ((n, m), item) in names.iter().zip(items.into_iter()) {
-                    env.borrow_mut().define(n, item, *m);
+                    env.borrow_mut().define_new(n, item, *m)?;
                 }
                 Ok(Flow::Normal(Value::Nil))
             }
@@ -243,7 +243,7 @@ impl Interpreter {
                 let cond = |i: f64| if st > 0.0 { i <= t } else { i >= t };
                 while cond(i) {
                     let child = Env::child(env);
-                    child.borrow_mut().define(var, Value::Number(i), false);
+                    child.borrow_mut().define_new(var, Value::Number(i), false)?;
                     match self.eval_block(body, &child)? {
                         Flow::Normal(_) => {}
                         Flow::Break => break,
@@ -276,10 +276,10 @@ impl Interpreter {
                 for (k, v) in items {
                     let child = Env::child(env);
                     if vars.len() == 1 {
-                        child.borrow_mut().define(&vars[0], v, false);
+                        child.borrow_mut().define_new(&vars[0], v, false)?;
                     } else {
-                        child.borrow_mut().define(&vars[0], k, false);
-                        child.borrow_mut().define(&vars[1], v, false);
+                        child.borrow_mut().define_new(&vars[0], k, false)?;
+                        child.borrow_mut().define_new(&vars[1], v, false)?;
                     }
                     match self.eval_block(body, &child)? {
                         Flow::Normal(_) => {}
@@ -341,7 +341,7 @@ impl Interpreter {
                     if pattern_match(&arm.pattern, &s, &mut bindings) {
                         let child = Env::child(env);
                         for (k, v) in bindings {
-                            child.borrow_mut().define(&k, v, false);
+                            child.borrow_mut().define_new(&k, v, false)?;
                         }
                         if let Some(g) = &arm.guard {
                             let gv = self.eval_value(g, &child)?;
@@ -422,24 +422,14 @@ impl Interpreter {
         match names {
             UseNames::AliasOnly => {
                 let a = alias.as_ref().unwrap();
-                if g.get(a).is_some() {
-                    return Err(msg::use_name_conflict(a));
-                }
-                g.define(a, m.clone(), false);
+                g.define_new(a, m.clone(), false)?;
             }
             UseNames::Wildcard => {
                 for (k, v) in &fields {
-                    let name = &k.0;
-                    if g.get(name).is_some() {
-                        return Err(msg::use_name_conflict(name));
-                    }
-                    g.define(name, v.clone(), false);
+                    g.define_new(&k.0, v.clone(), false)?;
                 }
                 if let Some(a) = alias {
-                    if g.get(a).is_some() {
-                        return Err(msg::use_name_conflict(a));
-                    }
-                    g.define(a, m.clone(), false);
+                    g.define_new(a, m.clone(), false)?;
                 }
             }
             UseNames::Explicit(list) => {
@@ -448,16 +438,10 @@ impl Interpreter {
                     let v = fields
                         .get(&key)
                         .ok_or_else(|| msg::use_name_not_in_module(n, module_name))?;
-                    if g.get(n).is_some() {
-                        return Err(msg::use_name_conflict(n));
-                    }
-                    g.define(n, v.clone(), false);
+                    g.define_new(n, v.clone(), false)?;
                 }
                 if let Some(a) = alias {
-                    if g.get(a).is_some() {
-                        return Err(msg::use_name_conflict(a));
-                    }
-                    g.define(a, m.clone(), false);
+                    g.define_new(a, m.clone(), false)?;
                 }
             }
         }
@@ -563,11 +547,11 @@ impl Interpreter {
                 for p in &func.params {
                     if p.star {
                         let rest: Vec<Value> = args[idx..].to_vec();
-                        call_env.borrow_mut().define(
+                        call_env.borrow_mut().define_new(
                             &p.name,
                             Value::Tuple(Rc::new(RefCell::new(rest))),
                             false,
-                        );
+                        )?;
                         idx = args.len();
                     } else {
                         let v = if idx < args.len() {
@@ -579,7 +563,7 @@ impl Interpreter {
                         } else {
                             return Err(msg::rt_too_few_args(required, args.len(), &p.name));
                         };
-                        call_env.borrow_mut().define(&p.name, v, false);
+                        call_env.borrow_mut().define_new(&p.name, v, false)?;
                     }
                 }
 

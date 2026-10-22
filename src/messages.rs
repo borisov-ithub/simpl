@@ -45,6 +45,21 @@ pub fn parse_newline_between_exprs(line: usize, col: usize, found: &str) -> Stri
 // Парсер — let / функции / параметры
 // ============================================================
 
+pub fn env_var_already_defined(name: &str) -> String {
+    format!(
+        "Переменная '{}' уже объявлена в этой области.\n\
+         Подсказка: используйте let ^{}, если хотите изменить значение, или другую область видимости.",
+        name, name
+    )
+}
+
+pub fn parse_duplicate_param(line: usize, col: usize, name: &str) -> String {
+    format!(
+        "Строка {}:{}: параметр '{}' уже объявлен в этом списке параметров.",
+        line, col, name
+    )
+}
+
 pub fn parse_let_expected_name(line: usize, col: usize, found: &str) -> String {
     format!(
         "Строка {}:{}: после 'let' ожидалось имя переменной, встретилось {}",

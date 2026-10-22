@@ -372,3 +372,47 @@ fn type_is_keyword_not_value() {
     let e = run_err("let t = type");
     assert!(e.contains("ожидалось выражение"), "сообщение: {}", e);
 }
+
+#[test]
+fn redeclare_in_same_scope_error() {
+    let e = run_err("let x = 1\nlet x = 2");
+    assert!(e.contains("уже объявлена"), "сообщение: {}", e);
+}
+
+#[test]
+fn redeclare_in_nested_scope_ok() {
+    let src = "let x = 1\nif true then\nlet x = 2\necho. x\nend\necho. x";
+    assert_eq!(run(src), "2\n1\n");
+}
+
+#[test]
+fn redeclare_in_function_ok() {
+    let src = "let x = 1\nlet f () =\nlet x = 2\nx\nend\necho. f(), x";
+    assert_eq!(run(src), "2 1\n");
+}
+
+#[test]
+fn redeclare_after_assign_ok() {
+    // После let ^x = 1; ^x = 2 — x изменена, но не переобъявлена
+    let src = "let ^x = 1\n^x = 2\necho. x";
+    assert_eq!(run(src), "2\n");
+}
+
+#[test]
+fn duplicate_param_error() {
+    let e = run_err("let f (x, x) = x end");
+    assert!(e.contains("уже объявлен"), "сообщение: {}", e);
+}
+
+#[test]
+fn let_tuple_redeclare_error() {
+    let e = run_err("let (a, b) = (1, 2)\nlet (a, c) = (3, 4)");
+    assert!(e.contains("уже объявлена"), "сообщение: {}", e);
+}
+
+#[test]
+fn use_conflict_error() {
+    let src = "let trim = 1\nuse string (trim)";
+    let e = run_err(src);
+    assert!(e.contains("уже объявлена"), "сообщение: {}", e);
+}

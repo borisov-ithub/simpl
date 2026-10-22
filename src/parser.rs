@@ -336,6 +336,7 @@ impl Parser {
             loop {
                 self.skip_newlines();
                 let star = self.match_tok(&Token::Star);
+                let (name_line, name_col) = self.loc();
                 let name = match self.advance() {
                     Token::Ident(s) => s,
                     other => {
@@ -343,6 +344,11 @@ impl Parser {
                         return Err(msg::parse_expected_param_name(l, c, &format!("{:?}", other)));
                     }
                 };
+
+                // проверка дубликата
+                if params.iter().any(|p| p.name == name) {
+                    return Err(msg::parse_duplicate_param(name_line, name_col, &name));
+                }
 
                 let default = if self.match_tok(&Token::Eq) {
                     Some(self.parse_expr()?)
