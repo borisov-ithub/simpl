@@ -206,6 +206,22 @@ fn echo_dot_newline() {
 }
 
 #[test]
+fn numeric_literals() {
+    assert_eq!(run("echo. 0b101010, 0o52, 0xFF, 0Xff"), "42 42 255 255\n");
+    assert_eq!(run("echo. 0xFF_FF"), "65535\n");
+}
+
+#[test]
+fn numeric_literal_bad() {
+    let e = run_err("echo. 0b102");
+    assert!(e.contains("Некорректное число"), "сообщение: {}", e);
+}
+
+// ============================================================
+// builtin
+// ============================================================
+
+#[test]
 fn builtin_len() {
     assert_eq!(run("echo. len(\"abc\"), len((1, 2)), len({ a = 1, b = 2 })"), "3 2 2\n");
 }
@@ -224,6 +240,54 @@ fn builtin_num() {
 fn builtin_range() {
     assert_eq!(run("for i in range(0, 3) do echo. i end"), "0\n1\n2\n");
 }
+
+#[test]
+fn num_parses_radix() {
+    assert_eq!(run("echo. num(\"0xFF\")"), "255\n");
+    assert_eq!(run("echo. num(\"0b101\")"), "5\n");
+    assert_eq!(run("echo. num(\"0o10\")"), "8\n");
+    assert_eq!(run("echo. num(\"42\")"), "42\n");
+    assert_eq!(run("echo. num(\"3.14\")"), "3.14\n");
+}
+
+#[test]
+fn bin_hex_oct() {
+    assert_eq!(run("echo. bin(42), hex(255), oct(8)"), "0b101010 0xff 0o10\n");
+    assert_eq!(run("echo. bin(-5)"), "-0b101\n");
+    assert_eq!(run("echo. hex(0)"), "0x0\n");
+}
+
+#[test]
+fn bin_float_error() {
+    let e = run_err("bin(1.5)");
+    assert!(e.contains("целое число"), "сообщение: {}", e);
+}
+
+#[test]
+fn ord_chr() {
+    assert_eq!(run("echo. ord(\"A\"), chr(65)"), "65 A\n");
+    assert_eq!(run("echo. ord(\"€\"), chr(8364)"), "8364 €\n");
+}
+
+#[test]
+fn ord_empty_error() {
+    let e = run_err("ord(\"\")");
+    assert!(e.contains("пуста"), "сообщение: {}", e);
+}
+
+#[test]
+fn ord_too_long_error() {
+    let e = run_err("ord(\"AB\")");
+    assert!(e.contains("один символ"), "сообщение: {}", e);
+}
+
+#[test]
+fn chr_invalid_error() {
+    let e = run_err("chr(999999999)");
+    assert!(e.contains("некорректный Unicode"), "сообщение: {}", e);
+}
+
+// ============================================================
 
 #[test]
 fn unclosed_function_error_mentions_start() {

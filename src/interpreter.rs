@@ -590,6 +590,11 @@ impl Interpreter {
             "num" => return self.call_num(args),
             "range" => return self.call_range(args),
             "input" => return self.call_input(args),
+            "bin" => return self.call_bin(args),
+            "hex" => return self.call_hex(args),
+            "oct" => return self.call_oct(args),
+            "ord" => return self.call_ord(args),
+            "chr" => return self.call_chr(args),
             _ => {}
         }
         if let Some(rest) = name.strip_prefix("string.") {
@@ -641,11 +646,72 @@ impl Interpreter {
         }
         match &args[0] {
             Value::Number(n) => Ok(Value::Number(*n)),
-            Value::Str(s) => s
-                .parse::<f64>()
+            Value::Str(s) => parse_num(s)
                 .map(Value::Number)
-                .map_err(|_| msg::bi_bad_type("num", "число", &format!("строку '{}'", s))),
+                .ok_or_else(|| msg::bi_bad_type("num", "число", &format!("строку '{}'", s))),
             other => Err(msg::bi_bad_type("num", "число", other.type_name())),
+        }
+    }
+
+    fn call_bin(&mut self, args: Vec<Value>) -> IResult<Value> {
+        self.format_radix(args, 2, "0b", "bin")
+    }
+    
+    fn call_oct(&mut self, args: Vec<Value>) -> IResult<Value> {
+        self.format_radix(args, 8, "0o", "oct")
+    }
+    
+    fn call_hex(&mut self, args: Vec<Value>) -> IResult<Value> {
+        self.format_radix(args, 16, "0x", "hex")
+    }
+    
+    fn format_radix(&mut self, args: Vec<Value>, radix: u32, prefix: &str, fname: &str) -> IResult<Value> {
+        if args.len() != 1 {
+            return Err(msg::bi_arity(fname, 1, args.len()));
+        }
+        let n = match &args[0] {
+            Value::Number(n) if n.fract() == 0.0 && n.is_finite() => *n as i64,
+            other => return Err(msg::bi_bad_type(fname, "целое число", other.type_name())),
+        };
+        let sign = if n < 0 { "-" } else { "" };
+        let abs = n.unsigned_abs();
+        let digits = match radix {
+            2 => format!("{:b}", abs),
+            8 => format!("{:o}", abs),
+            16 => format!("{:x}", abs),
+            _ => unreachable!(),
+        };
+        Ok(Value::Str(format!("{}{}{}", sign, prefix, digits)))
+    }
+    
+    fn call_ord(&mut self, args: Vec<Value>) -> IResult<Value> {
+        if args.len() != 1 {
+            return Err(msg::bi_arity("ord", 1, args.len()));
+        }
+        let s = match &args[0] {
+            Value::Str(s) => s,
+            other => return Err(msg::bi_bad_type("ord", "строку", other.type_name())),
+        };
+        let mut chars = s.chars();
+        let c = match (chars.next(), chars.next()) {
+            (Some(c), None) => c,
+            (None, _) => return Err(msg::bi_ord_empty()),
+            _ => return Err(msg::bi_ord_too_long(s)),
+        };
+        Ok(Value::Number(c as u32 as f64))
+    }
+    
+    fn call_chr(&mut self, args: Vec<Value>) -> IResult<Value> {
+        if args.len() != 1 {
+            return Err(msg::bi_arity("chr", 1, args.len()));
+        }
+        let n = match &args[0] {
+            Value::Number(n) if n.fract() == 0.0 && *n >= 0.0 && n.is_finite() => *n as u32,
+            other => return Err(msg::bi_bad_type("chr", "неотрицательное целое число", other.type_name())),
+        };
+        match char::from_u32(n) {
+            Some(c) => Ok(Value::Str(c.to_string())),
+            None => Err(msg::bi_chr_invalid(n)),
         }
     }
 
@@ -832,5 +898,18 @@ fn pattern_match(p: &Pattern, v: &Value, bindings: &mut Vec<(String, Value)>) ->
             true
         }
         _ => false,
+    }
+}
+
+fn parse_num(s: &str) -> Option<f64> {
+    let s = s.trim();
+    if let Some(rest) = s.strip_prefix("0x").or_else(|| s.strip_prefix("0X")) {
+        i64::from_str_radix(&rest.replace('_', ""), 16).ok().map(|n| n as f64)
+    } else if let Some(rest) = s.strip_prefix("0b").or_else(|| s.strip_prefix("0B")) {
+        i64::from_str_radix(&rest.replace('_', ""), 2).ok().map(|n| n as f64)
+    } else if let Some(rest) = s.strip_prefix("0o").or_else(|| s.strip_prefix("0O")) {
+        i64::from_str_radix(&rest.replace('_', ""), 8).ok().map(|n| n as f64)
+    } else {
+        s.replace('_', "").parse::<f64>().ok()
     }
 }

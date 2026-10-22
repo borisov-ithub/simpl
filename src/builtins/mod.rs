@@ -13,7 +13,7 @@ use std::rc::Rc;
 use crate::value::{OrderedKey, StructMap, Value};
 
 pub fn register(globals: &mut HashMap<String, (Value, bool)>) {
-    for name in ["len", "str", "num", "range", "input"] {
+    for name in ["len", "str", "num", "range", "input", "bin", "hex", "oct", "ord", "chr"] {
         globals.insert(name.to_string(), (Value::Builtin(name), false));
     }
 
@@ -56,6 +56,8 @@ pub fn register(globals: &mut HashMap<String, (Value, bool)>) {
             ("random", "math.random"),
             ("randomseed", "math.randomseed"),
             ("log", "math.log"),
+            ("degree", "math.degree"),
+            ("radian", "math.radian"),
         ]),
         ("iter", &[
             ("map", "iter.map"),
@@ -105,6 +107,10 @@ pub fn register(globals: &mut HashMap<String, (Value, bool)>) {
             ("mktime", "datetime.mktime"),
         ]),
     ];
+
+    if let Some((Value::Struct(s), _)) = globals.get("math") {
+        s.borrow_mut().insert(OrderedKey("pi".to_string()), Value::Number(std::f64::consts::PI));
+    }
 
     for (mod_name, fns) in modules {
         let mut fields = StructMap::new();

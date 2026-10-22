@@ -123,6 +123,18 @@ pub fn parse_star_with_default(line: usize, col: usize, name: &str) -> String {
     )
 }
 
+pub fn bi_ord_empty() -> String {
+    "ord(): строка пуста".to_string()
+}
+
+pub fn bi_ord_too_long(s: &str) -> String {
+    format!("ord(): ожидался один символ, получено '{}'", s)
+}
+
+pub fn bi_chr_invalid(n: u32) -> String {
+    format!("chr(): {} — некорректный Unicode-код", n)
+}
+
 // ============================================================
 // Парсер — незакрытые конструкции (с указанием начала)
 // ============================================================

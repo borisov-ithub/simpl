@@ -16,6 +16,8 @@ pub fn call(_interp: &mut Interpreter, name: &str, args: Vec<Value>) -> IResult<
         "max" => call_minmax(args, false),
         "random" => call_random(args),
         "randomseed" => call_randomseed(args),
+        "degree" => num_map1(args, "math.degree", |x| x.to_degrees()),
+        "radian" => num_map1(args, "math.radian", |x| x.to_radians()),
         _ => Err(msg::bi_unknown(&format!("math.{}", name))),
     }
 }

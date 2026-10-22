@@ -296,6 +296,12 @@ fn math_log_bad_base_error() {
     assert!(e.contains("основание должно быть > 0 и != 1"), "сообщение: {}", e);
 }
 
+#[test]
+fn math_degree_radian() {
+    assert_eq!(run("echo. math.round(math.degree(math.pi))"), "180\n");
+    assert_eq!(run("echo. math.round(math.radian(180) * 100) / 100"), "3.14\n");
+}
+
 // ============================================================
 // iter (map/filter/reduce)
 // ============================================================

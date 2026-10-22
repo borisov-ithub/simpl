@@ -107,7 +107,19 @@
     "numbers": {
       "patterns": [
         {
-          "name": "constant.numeric.simpl",
+          "name": "constant.numeric.hex.simpl",
+          "match": "\\b0[xX][0-9a-fA-F_]+\\b"
+        },
+        {
+          "name": "constant.numeric.oct.simpl",
+          "match": "\\b0[oO][0-7_]+\\b"
+        },
+        {
+          "name": "constant.numeric.bin.simpl",
+          "match": "\\b0[bB][01_]+\\b"
+        },
+        {
+          "name": "constant.numeric.decimal.simpl",
           "match": "\\b[0-9][0-9_]*(\\.[0-9][0-9_]*)?\\b"
         }
       ]
@@ -183,10 +195,10 @@
       "patterns": [
         {
           "name": "support.function.builtin.simpl",
-          "match": "\\b(len|type|str|num|range|input)\\b(?=\\s*\\()"
+          "match": "\\b(len|str|num|range|input|bin|hex|oct|ord|chr)\\b"
         },
         {
-          "match": "\\b(len|type|str|num|range|input)\\b",
+          "match": "\\b(len|str|num|range|input|bin|hex|oct|ord|chr)\\b",
           "captures": {
             "1": { "name": "support.function.builtin.simpl" }
           }

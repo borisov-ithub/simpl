@@ -96,6 +96,20 @@ impl Lexer {
         }
 
         if c.is_ascii_digit() {
+            // проверяем префиксы 0x, 0o, 0b
+            if c == '0' {
+                if let Some(next) = self.peek2() {
+                    if next == 'x' || next == 'X' {
+                        return self.read_radix_number(16, "0x");
+                    }
+                    if next == 'o' || next == 'O' {
+                        return self.read_radix_number(8, "0o");
+                    }
+                    if next == 'b' || next == 'B' {
+                        return self.read_radix_number(2, "0b");
+                    }
+                }
+            }
             let mut s = String::new();
             while let Some(ch) = self.peek() {
                 if ch.is_ascii_digit() || ch == '_' || (ch == '.' && self.peek2().map_or(false, |d| d.is_ascii_digit())) {
@@ -198,5 +212,20 @@ impl Lexer {
             ':' => Token::Colon,
             other => return Err(msg::lex_unknown_char(self.line, self.col, other)),
         }))
+    }
+
+    fn read_radix_number(&mut self, radix: u32, prefix: &str) -> Result<Option<Token>, String> {
+        self.advance(); // 0
+        self.advance(); // x/o/b
+        let mut s = String::new();
+        while let Some(ch) = self.peek() {
+            if ch == '_' || ch.is_ascii_alphanumeric() {
+                s.push(ch); self.advance();
+            } else { break; }
+        }
+        let clean = s.replace('_', "");
+        let n = i64::from_str_radix(&clean, radix)
+            .map_err(|_| msg::lex_bad_number(&format!("{}{}", prefix, s)))?;
+        Ok(Some(Token::Number(n as f64)))
     }
 }
