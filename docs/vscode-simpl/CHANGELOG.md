@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.1.0
+
+- Добавлены строки в одинарных кавычках `'...'` (альтернатива `"..."`).
+- Escape `\'` работает в обоих видах строк.
+- Интерполяция `$(...)` работает в обоих видах строк.
+- Подсветка `string.quoted.single.simpl` в VSCode.
+- Автозакрытие `'` в VSCode.
+
 ## 1.5.0
 
 - Добавлена подсветка `import`: ключевое слово (`keyword.control.import.simpl`), путь модуля (`entity.name.namespace.simpl`), путь в кавычках (`string.quoted.double.path.simpl`).

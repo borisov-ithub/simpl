@@ -145,19 +145,21 @@ impl Lexer {
             }));
         }
 
-        if c == '"' {
+        if c == '"' || c == '\'' {
+            let quote = c;
             self.advance();
             let mut s = String::new();
             loop {
                 match self.peek() {
                     None => return Err(msg::lex_unclosed_string(self.line)),
-                    Some('"') => { self.advance(); break; }
+                    Some(ch) if ch == quote => { self.advance(); break; }
                     Some('\\') => {
                         self.advance();
                         match self.advance() {
                             Some('n') => s.push('\n'),
                             Some('t') => s.push('\t'),
                             Some('"') => s.push('"'),
+                            Some('\'') => s.push('\''),
                             Some('\\') => s.push('\\'),
                             Some('$') => s.push('$'),
                             Some(other) => return Err(msg::lex_unknown_escape(other)),

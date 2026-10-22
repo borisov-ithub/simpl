@@ -58,7 +58,32 @@
           "patterns": [
             {
               "name": "constant.character.escape.simpl",
-              "match": "\\\\[nt\"\\\\$]"
+              "match": "\\\\[nt\"'\\\\$]"
+            },
+            {
+              "name": "meta.interpolation.simpl",
+              "begin": "\\$\\(",
+              "beginCaptures": {
+                "0": { "name": "punctuation.section.interpolation.begin.simpl" }
+              },
+              "end": "\\)",
+              "endCaptures": {
+                "0": { "name": "punctuation.section.interpolation.end.simpl" }
+              },
+              "patterns": [
+                { "include": "$self" }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.single.simpl",
+          "begin": "'",
+          "end": "'",
+          "patterns": [
+            {
+              "name": "constant.character.escape.simpl",
+              "match": "\\\\[nt\"'\\\\$]"
             },
             {
               "name": "meta.interpolation.simpl",

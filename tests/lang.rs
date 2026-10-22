@@ -309,3 +309,28 @@ fn import_inside_function_error() {
     let e = simpl::run_source_capture("let f () =\nimport x\n1\nend").expect_err("должна быть ошибка");
     assert!(e.contains("только на верхнем уровне"), "сообщение: {}", e);
 }
+
+#[test]
+fn single_quoted_string() {
+    assert_eq!(run("echo. 'привет'"), "привет\n");
+}
+
+#[test]
+fn single_quoted_with_double_inside() {
+    assert_eq!(run("echo. 'он сказал \"привет\"'"), "он сказал \"привет\"\n");
+}
+
+#[test]
+fn double_quoted_with_single_inside() {
+    assert_eq!(run("echo. \"it's fine\""), "it's fine\n");
+}
+
+#[test]
+fn single_quoted_escape() {
+    assert_eq!(run("echo. 'it\\'s fine'"), "it's fine\n");
+}
+
+#[test]
+fn single_quoted_interpolation() {
+    assert_eq!(run("let x = 2\necho. 'сумма: $(x + 3)'"), "сумма: 5\n");
+}
