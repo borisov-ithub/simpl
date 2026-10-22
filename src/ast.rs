@@ -39,6 +39,11 @@ pub enum Expr {
     Return(Option<Box<Expr>>),
 
     Use { module: String, alias: Option<String>, names: UseNames },
+    Import {
+        path: String,
+        alias: Option<String>,
+        names: UseNames,
+    },
 }
 
 #[derive(Debug, Clone)]

@@ -70,7 +70,9 @@ fn main() {
         return;
     }
 
-    if let Err(e) = simpl::run_source(&src) {
+    let path_buf = std::path::PathBuf::from(&path);
+
+    if let Err(e) = simpl::run_source_with_path(&src, Some(path_buf)) {
         eprintln!("{}", e);
         std::process::exit(1);
     }

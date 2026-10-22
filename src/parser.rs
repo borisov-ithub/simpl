@@ -21,6 +21,8 @@ impl Parser {
         while !self.check(&Token::Eof) {
             if self.check(&Token::Use) {
                 block.push(self.parse_use()?);
+            } else if self.check(&Token::Import) {
+                block.push(self.parse_import()?);
             } else {
                 block.push(self.parse_expr()?);
             }
@@ -82,10 +84,16 @@ impl Parser {
         self.skip_newlines();
         loop {
             if stops.iter().any(|s| self.check(s)) || self.check(&Token::Eof) { break; }
+    
             if self.check(&Token::Use) {
                 let (l, c) = self.loc();
                 return Err(msg::parse_use_only_top_level(l, c));
             }
+            if self.check(&Token::Import) {
+                let (l, c) = self.loc();
+                return Err(msg::parse_import_only_top_level(l, c));
+            }
+    
             block.push(self.parse_expr()?);
             if stops.iter().any(|s| self.check(s)) { break; }
             if self.check(&Token::Newline) { self.skip_newlines(); }
@@ -137,6 +145,108 @@ impl Parser {
             return Err(msg::parse_use_requires_names(&module));
         };
         Ok(Expr::Use { module, alias, names })
+    }
+
+    fn parse_import(&mut self) -> PResult<Expr> {
+        let (line, col) = self.loc();
+        self.expect(&Token::Import, "ожидалось 'import'")?;
+        let path = self.parse_import_path()?;
+    
+        let explicit_alias = if self.match_tok(&Token::As) {
+            match self.advance() {
+                Token::Ident(s) => Some(s),
+                other => return Err(msg::parse_import_expected_path(line, col, &format!("{:?}", other))),
+            }
+        } else {
+            None
+        };
+    
+        let names = if self.match_tok(&Token::LParen) {
+            if self.match_tok(&Token::Star) {
+                self.expect(&Token::RParen, &msg::parse_use_expected_rparen())?;
+                UseNames::Wildcard
+            } else {
+                let mut list = Vec::new();
+                loop {
+                    match self.advance() {
+                        Token::Ident(s) => list.push(s),
+                        other => {
+                            let (l, c) = self.loc();
+                            return Err(msg::parse_use_expected_name(l, c, &format!("{:?}", other)));
+                        }
+                    }
+                    if !self.match_tok(&Token::Comma) { break; }
+                }
+                self.expect(&Token::RParen, &msg::parse_use_expected_rparen())?;
+                UseNames::Explicit(list)
+            }
+        } else if explicit_alias.is_some() {
+            UseNames::AliasOnly
+        } else {
+            // import utils — модуль под своим именем
+            UseNames::AliasOnly
+        };
+    
+        // Если алиас не задан явно, но names == AliasOnly — берём последний сегмент пути
+        let alias = match (explicit_alias, &names) {
+            (Some(a), _) => Some(a),
+            (None, UseNames::AliasOnly) => {
+                // "library/utils" → "utils"; "../file" → "file"; "utils.spl" → "utils"
+                let name = path
+                    .rsplit('/')
+                    .next()
+                    .unwrap_or(&path)
+                    .trim_end_matches(".spl")
+                    .to_string();
+                Some(name)
+            }
+            (None, _) => None,
+        };
+    
+        Ok(Expr::Import { path, alias, names })
+    }
+    
+    fn parse_import_path(&mut self) -> PResult<String> {
+        // Строка в кавычках — берём как есть
+        if let Token::Str(s) = self.peek() {
+            let s = s.clone();
+            self.advance();
+            return Ok(s);
+        }
+    
+        let mut parts: Vec<String> = Vec::new();
+    
+        // Первый сегмент: Ident, "." или ".."
+        if self.check(&Token::Dot) {
+            self.advance();
+            if self.check(&Token::Dot) {
+                self.advance();
+                parts.push("..".to_string());
+            } else {
+                parts.push(".".to_string());
+            }
+        } else {
+            match self.advance() {
+                Token::Ident(s) => parts.push(s),
+                other => {
+                    let (l, c) = self.loc();
+                    return Err(msg::parse_import_expected_path(l, c, &format!("{:?}", other)));
+                }
+            }
+        }
+    
+        // Остальные сегменты через "/"
+        while self.match_tok(&Token::Slash) {
+            match self.advance() {
+                Token::Ident(s) => parts.push(s),
+                other => {
+                    let (l, c) = self.loc();
+                    return Err(msg::parse_import_expected_segment(l, c, &format!("{:?}", other)));
+                }
+            }
+        }
+    
+        Ok(parts.join("/"))
     }
 
     pub fn parse_expr(&mut self) -> PResult<Expr> {

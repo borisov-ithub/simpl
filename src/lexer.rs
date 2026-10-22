@@ -8,7 +8,7 @@ pub enum Token {
     Str(String),
     Ident(String),
 
-    Use, As,
+    Use, As, Import,
     Let,
     If, Elseif, Else, Then, End,
     For, In, Do, Loop, Break, Continue,
@@ -116,6 +116,7 @@ impl Lexer {
             return Ok(Some(match s.as_str() {
                 "use" => Token::Use,
                 "as" => Token::As,
+                "import" => Token::Import,
                 "let" => Token::Let,
                 "if" => Token::If,
                 "elseif" => Token::Elseif,

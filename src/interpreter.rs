@@ -1,5 +1,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::collections::{HashMap, HashSet};
+use std::path::{PathBuf};
 
 use crate::ast::*;
 use crate::builtins;
@@ -10,6 +12,9 @@ use crate::value::{Function, OrderedKey, StructMap, Value};
 pub struct Interpreter {
     pub globals: EnvRef,
     pub out: Rc<RefCell<Vec<u8>>>,
+    pub current_file: Option<PathBuf>,
+    pub module_cache: Rc<RefCell<HashMap<PathBuf, Value>>>,
+    pub loading: Rc<RefCell<HashSet<PathBuf>>>,
 }
 
 #[derive(Debug)]
@@ -27,6 +32,9 @@ impl Interpreter {
         Self {
             globals: Env::new(),
             out: Rc::new(RefCell::new(Vec::new())),
+            current_file: None,
+            module_cache: Rc::new(RefCell::new(HashMap::new())),
+            loading: Rc::new(RefCell::new(HashSet::new())),
         }
     }
 
@@ -36,16 +44,7 @@ impl Interpreter {
 
     pub fn run(&mut self, program: &Block) -> IResult<Value> {
         let env = self.globals.clone();
-        let mut last = Value::Nil;
-        for e in program {
-            match self.eval(e, &env)? {
-                Flow::Normal(v) => last = v,
-                Flow::Return(v) => return Ok(v),
-                Flow::Break => return Err(msg::rt_break_outside_loop()),
-                Flow::Continue => return Err(msg::rt_continue_outside_loop()),
-            }
-        }
-        Ok(last)
+        self.run_in_env(program, &env)
     }
 
     pub(crate) fn eval_block(&mut self, block: &Block, env: &EnvRef) -> IResult<Flow> {
@@ -378,6 +377,13 @@ impl Interpreter {
                 self.eval_use(module, alias, names)
                     .map(|_| Flow::Normal(Value::Nil))
             }
+
+            Expr::Import { path, alias, names } => {
+                let module = self.load_module(path)?;
+                let module_name = format!("import {}", path);
+                self.bind_names(module, alias, names, &module_name)
+                    .map(|_| Flow::Normal(Value::Nil))
+            }
         }
     }
 
@@ -392,13 +398,23 @@ impl Interpreter {
             .borrow()
             .get(module)
             .ok_or_else(|| msg::use_unknown_module(module))?;
+        self.bind_names(m, alias, names, module)
+    }
+    
+    fn bind_names(
+        &mut self,
+        m: Value,
+        alias: &Option<String>,
+        names: &UseNames,
+        module_name: &str,
+    ) -> Result<(), String> {
         let fields = match &m {
             Value::Struct(s) => s.borrow().clone(),
-            _ => return Err(msg::use_unknown_module(module)),
+            _ => return Err(msg::use_unknown_module(module_name)),
         };
-
+    
         let mut g = self.globals.borrow_mut();
-
+    
         match names {
             UseNames::AliasOnly => {
                 let a = alias.as_ref().unwrap();
@@ -427,7 +443,7 @@ impl Interpreter {
                     let key = OrderedKey::from_str(n);
                     let v = fields
                         .get(&key)
-                        .ok_or_else(|| msg::use_name_not_in_module(n, module))?;
+                        .ok_or_else(|| msg::use_name_not_in_module(n, module_name))?;
                     if g.get(n).is_some() {
                         return Err(msg::use_name_conflict(n));
                     }
@@ -694,6 +710,84 @@ impl Interpreter {
             }
         }
         Ok(Value::Str(line))
+    }
+
+    fn resolve_import_path(&self, path: &str) -> IResult<PathBuf> {
+        let p = PathBuf::from(path);
+        let abs = if p.is_absolute() {
+            p
+        } else if let Some(base) = &self.current_file {
+            base.parent()
+                .map(|d| d.join(&p))
+                .unwrap_or_else(|| p.clone())
+        } else {
+            p
+        };
+        let abs = if abs.extension().is_some() {
+            abs
+        } else {
+            abs.with_extension("spl")
+        };
+        abs.canonicalize()
+            .map_err(|e| msg::import_read_error(&abs.display().to_string(), &e))
+    }
+    
+    fn load_module(&mut self, path: &str) -> IResult<Value> {
+        let full_path = self.resolve_import_path(path)?;
+    
+        if let Some(cached) = self.module_cache.borrow().get(&full_path) {
+            return Ok(cached.clone());
+        }
+        if self.loading.borrow().contains(&full_path) {
+            return Err(msg::import_cycle(&full_path.display().to_string()));
+        }
+        self.loading.borrow_mut().insert(full_path.clone());
+    
+        let src = std::fs::read_to_string(&full_path)
+            .map_err(|e| msg::import_read_error(&full_path.display().to_string(), &e))?;
+    
+        let mut lexer = crate::lexer::Lexer::new(&src);
+        let tokens = lexer.tokenize()?;
+        let mut parser = crate::parser::Parser::new(tokens);
+        let program = parser.parse_program()?;
+    
+        let module_env = Env::new();
+        {
+            let mut g = module_env.borrow_mut();
+            crate::builtins::register(&mut g.vars);
+        }
+        let initial: HashSet<String> = module_env.borrow().vars.keys().cloned().collect();
+    
+        let old_file = self.current_file.clone();
+        self.current_file = Some(full_path.clone());
+        let run_result = self.run_in_env(&program, &module_env);
+        self.current_file = old_file;
+        run_result?;
+    
+        let final_vars: HashMap<String, (Value, bool)> = module_env.borrow().vars.clone();
+        let mut fields = StructMap::new();
+        for (name, (val, _)) in final_vars {
+            if initial.contains(&name) { continue; }
+            fields.insert(OrderedKey(name), val);
+        }
+        let module = Value::Struct(Rc::new(RefCell::new(fields)));
+    
+        self.module_cache.borrow_mut().insert(full_path.clone(), module.clone());
+        self.loading.borrow_mut().remove(&full_path);
+        Ok(module)
+    }
+    
+    pub fn run_in_env(&mut self, program: &Block, env: &EnvRef) -> IResult<Value> {
+        let mut last = Value::Nil;
+        for e in program {
+            match self.eval(e, env)? {
+                Flow::Normal(v) => last = v,
+                Flow::Return(v) => return Ok(v),
+                Flow::Break => return Err(msg::rt_break_outside_loop()),
+                Flow::Continue => return Err(msg::rt_continue_outside_loop()),
+            }
+        }
+        Ok(last)
     }
 }
 

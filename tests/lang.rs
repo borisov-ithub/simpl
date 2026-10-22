@@ -236,3 +236,76 @@ fn newline_between_exprs_required() {
     let e = run_err("echo. 1 echo. 2");
     assert!(e.contains("перевод строки"), "сообщение: {}", e);
 }
+
+#[test]
+fn import_basic() {
+    let dir = std::env::temp_dir().join(format!("simpl_import_{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("utils.spl"), "let add (a, b) = a + b end\nlet PI = 3.14\n").unwrap();
+    let main_src = "import utils\necho. utils.add(1, 2), utils.PI";
+    let main_path = dir.join("main.spl");
+    std::fs::write(&main_path, main_src).unwrap();
+
+    let out = simpl::run_source_capture_with_path(main_src, Some(main_path)).unwrap();
+    assert_eq!(out, "3 3.14\n");
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn import_wildcard() {
+    let dir = std::env::temp_dir().join(format!("simpl_import_w_{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("m.spl"), "let f (x) = x * 2 end\n").unwrap();
+    let main_src = "import m (*)\necho. f(5)";
+    let main_path = dir.join("main.spl");
+    std::fs::write(&main_path, main_src).unwrap();
+
+    let out = simpl::run_source_capture_with_path(main_src, Some(main_path)).unwrap();
+    assert_eq!(out, "10\n");
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn import_alias() {
+    let dir = std::env::temp_dir().join(format!("simpl_import_a_{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("m.spl"), "let f (x) = x + 1 end\n").unwrap();
+    let main_src = "import m as mm\necho. mm.f(5)";
+    let main_path = dir.join("main.spl");
+    std::fs::write(&main_path, main_src).unwrap();
+
+    let out = simpl::run_source_capture_with_path(main_src, Some(main_path)).unwrap();
+    assert_eq!(out, "6\n");
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn import_missing_file_error() {
+    let e = simpl::run_source_capture("import nosuchfile").expect_err("должна быть ошибка");
+    assert!(e.contains("не удалось прочитать"), "сообщение: {}", e);
+}
+
+#[test]
+fn import_cycle_error() {
+    let dir = std::env::temp_dir().join(format!("simpl_import_cycle_{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("a.spl"), "import b\nlet x = 1\n").unwrap();
+    std::fs::write(dir.join("b.spl"), "import a\nlet y = 2\n").unwrap();
+    let main_src = "import a";
+    let main_path = dir.join("main.spl");
+    std::fs::write(&main_path, main_src).unwrap();
+
+    let e = simpl::run_source_capture_with_path(main_src, Some(main_path)).expect_err("должна быть ошибка");
+    assert!(e.contains("Циклический импорт"), "сообщение: {}", e);
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn import_inside_function_error() {
+    let e = simpl::run_source_capture("let f () =\nimport x\n1\nend").expect_err("должна быть ошибка");
+    assert!(e.contains("только на верхнем уровне"), "сообщение: {}", e);
+}

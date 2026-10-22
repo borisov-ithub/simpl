@@ -737,3 +737,44 @@ pub fn input_prompt(prompt: &str) -> String {
 pub fn input_read_error(err: &std::io::Error) -> String {
     format!("input(): не удалось прочитать строку: {}", err)
 }
+
+// ============================================================
+// import
+// ============================================================
+
+pub fn parse_import_only_top_level(line: usize, col: usize) -> String {
+    format!(
+        "Строка {}:{}: 'import' допустим только на верхнем уровне файла, вне функций и блоков.",
+        line, col
+    )
+}
+
+pub fn parse_import_expected_path(line: usize, col: usize, found: &str) -> String {
+    format!(
+        "Строка {}:{}: ожидался путь файла после 'import', встретилось {}",
+        line, col, found
+    )
+}
+
+pub fn parse_import_expected_segment(line: usize, col: usize, found: &str) -> String {
+    format!(
+        "Строка {}:{}: в пути import ожидалось имя сегмента, встретилось {}",
+        line, col, found
+    )
+}
+
+pub fn import_cycle(path: &str) -> String {
+    format!("Циклический импорт: {}", path)
+}
+
+pub fn import_read_error(path: &str, err: &std::io::Error) -> String {
+    format!("import: не удалось прочитать '{}': {}", path, err)
+}
+
+pub fn parse_import_requires_names(path: &str) -> String {
+    format!(
+        "import {} без скобок и без 'as'.\n\
+         Подсказка: используйте import {} (*), import {} (имя, ...) или import {} as псевдоним.",
+        path, path, path, path
+    )
+}

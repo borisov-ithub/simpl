@@ -2,7 +2,7 @@
   "name": "simpl",
   "displayName": "Simpl",
   "description": "Подсветка синтаксиса и сниппеты для учебного языка Simpl",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "publisher": "your-name",
   "engines": {
     "vscode": "^1.60.0"

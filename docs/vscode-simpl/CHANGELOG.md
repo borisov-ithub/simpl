@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.5.0
+
+- Добавлена подсветка `import`: ключевое слово (`keyword.control.import.simpl`), путь модуля (`entity.name.namespace.simpl`), путь в кавычках (`string.quoted.double.path.simpl`).
+- `import` добавлен в список ключевых слов на случай, если специфичный паттерн не сработал.
+- Обновлён `README.md`: раздел про `import` и новые скоупы.
+
 ## 1.4.0
 
 - Улучшена подсветка `echo` и `echo.` — теперь отдельные скоупы `keyword.other.echo.simpl` и `keyword.other.echo.newline.simpl`.

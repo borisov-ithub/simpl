@@ -8,6 +8,7 @@
     { "include": "#numbers" },
     { "include": "#function-declaration" },
     { "include": "#let-declaration" },
+    { "include": "#import" },
     { "include": "#keywords" },
     { "include": "#echo" },
     { "include": "#builtin-modules" },
@@ -25,7 +26,29 @@
         }
       ]
     },
-
+    "import": {
+      "patterns": [
+        {
+          "match": "\\b(import)\\s+([A-Za-z_][A-Za-z0-9_]*|\\.\\.?)((?:/[A-Za-z_][A-Za-z0-9_]*)*)",
+          "captures": {
+            "1": { "name": "keyword.control.import.simpl" },
+            "2": { "name": "entity.name.namespace.simpl" },
+            "3": { "name": "entity.name.namespace.path.simpl" }
+          }
+        },
+        {
+          "match": "\\b(import)\\s+(\"(?:[^\"\\\\]|\\\\.)*\")",
+          "captures": {
+            "1": { "name": "keyword.control.import.simpl" },
+            "2": { "name": "string.quoted.double.path.simpl" }
+          }
+        },
+        {
+          "name": "keyword.control.import.simpl",
+          "match": "\\bimport\\b"
+        }
+      ]
+    },
     "strings": {
       "patterns": [
         {
@@ -102,7 +125,7 @@
       "patterns": [
         {
           "name": "keyword.control.simpl",
-          "match": "\\b(if|then|elseif|else|end|for|in|do|loop|break|continue|match|return|and|or|not|use|as)\\b"
+          "match": "\\b(if|then|elseif|else|end|for|in|do|loop|break|continue|match|return|and|or|not|use|as|import)\\b"
         }
       ]
     },

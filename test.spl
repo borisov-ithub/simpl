@@ -1,4 +1,9 @@
 -- Проверка подсветки
+import file
+import file as f
+
+use string as s (*)
+
 let add (a, b) = a + b end
     let ^counter = 0
     let f = \(x) = x * 2 end
