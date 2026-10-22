@@ -65,6 +65,10 @@ impl Interpreter {
             Expr::Bool(b) => Ok(Flow::Normal(Value::Bool(*b))),
             Expr::Nil => Ok(Flow::Normal(Value::Nil)),
             
+            Expr::TypeOf(operand) => {
+                let v = self.eval_value(operand, env)?;
+                Ok(Flow::Normal(Value::Str(v.type_name().to_string())))
+            }
             Expr::Interpolated(parts) => {
                 let mut s = String::new();
                 for p in parts {
@@ -598,7 +602,6 @@ impl Interpreter {
     fn call_builtin(&mut self, name: &str, args: Vec<Value>) -> IResult<Value> {
         match name {
             "len" => return self.call_len(args),
-            "type" => return self.call_type(args),
             "str" => return self.call_str(args),
             "num" => return self.call_num(args),
             "range" => return self.call_range(args),
@@ -639,13 +642,6 @@ impl Interpreter {
             Value::Struct(s) => Ok(Value::Number(s.borrow().len() as f64)),
             other => Err(msg::bi_bad_type("len", "строку, кортеж или struct", other.type_name())),
         }
-    }
-
-    fn call_type(&mut self, args: Vec<Value>) -> IResult<Value> {
-        if args.len() != 1 {
-            return Err(msg::bi_arity("type", 1, args.len()));
-        }
-        Ok(Value::Str(args[0].type_name().to_string()))
     }
 
     fn call_str(&mut self, args: Vec<Value>) -> IResult<Value> {

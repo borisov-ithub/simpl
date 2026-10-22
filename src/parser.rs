@@ -549,6 +549,10 @@ impl Parser {
             let e = self.parse_unary()?;
             return Ok(Expr::Unary { op: UnaryOp::Neg, operand: Box::new(e) });
         }
+        if self.match_tok(&Token::Type) {
+            let e = self.parse_unary()?;
+            return Ok(Expr::TypeOf(Box::new(e)));
+        }
         self.parse_postfix()
     }
 

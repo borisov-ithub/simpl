@@ -13,7 +13,7 @@ pub enum Token {
     If, Elseif, Else, Then, End,
     For, In, Do, Loop, Break, Continue,
     Match,
-    Echo, EchoDot,
+    Echo, EchoDot, Type,
     True, False, Nil,
     And, Or, Not,
     Return,
@@ -137,6 +137,7 @@ impl Lexer {
                 "or" => Token::Or,
                 "not" => Token::Not,
                 "return" => Token::Return,
+                "type" => Token::Type,
                 "echo" => {
                     if self.peek() == Some('.') { self.advance(); Token::EchoDot }
                     else { Token::Echo }

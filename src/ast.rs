@@ -18,7 +18,8 @@ pub enum Expr {
     
     Unary { op: UnaryOp, operand: Box<Expr> },
     Binary { op: BinOp, left: Box<Expr>, right: Box<Expr> },
-
+    TypeOf(Box<Expr>),
+    
     Index { target: Box<Expr>, index: Box<Expr> },
     Field { target: Box<Expr>, name: String },
 

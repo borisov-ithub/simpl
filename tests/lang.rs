@@ -334,3 +334,41 @@ fn single_quoted_escape() {
 fn single_quoted_interpolation() {
     assert_eq!(run("let x = 2\necho. 'сумма: $(x + 3)'"), "сумма: 5\n");
 }
+
+#[test]
+fn type_operator() {
+    assert_eq!(run("echo. type 42"), "number\n");
+    assert_eq!(run("echo. type \"abc\""), "string\n");
+    assert_eq!(run("echo. type true"), "bool\n");
+    assert_eq!(run("echo. type nil"), "nil\n");
+    assert_eq!(run("echo. type (1, 2)"), "tuple\n");
+    assert_eq!(run("echo. type { a = 1 }"), "struct\n");
+}
+
+#[test]
+fn type_with_parens_backward_compat() {
+    assert_eq!(run("echo. type(42)"), "number\n");
+}
+
+#[test]
+fn type_precedence() {
+    // type x + 1 = (type x) + 1 → "number" + 1 → ошибка, потому что "number" ++ 1 нельзя через +
+    // Проверим через конкатенацию:
+    assert_eq!(run("let x = 42\necho. type x ++ \"!\""), "number!\n");
+}
+
+#[test]
+fn type_of_function() {
+    assert_eq!(run("let f (x) = x end\necho. type f"), "function\n");
+}
+
+#[test]
+fn type_in_expression() {
+    assert_eq!(run("echo. type 42 == \"number\""), "true\n");
+}
+
+#[test]
+fn type_is_keyword_not_value() {
+    let e = run_err("let t = type");
+    assert!(e.contains("ожидалось выражение"), "сообщение: {}", e);
+}
