@@ -95,18 +95,23 @@ impl Interpreter {
 
             Expr::Struct(fields) => {
                 let mut map = StructMap::new();
-                let mut auto = 0i64;
+                let mut max_num: Option<i64> = None;
                 for f in fields {
                     let v = self.eval_value(&f.value, env)?;
                     let key = match &f.key {
                         Some(k) => OrderedKey::from_str(k),
                         None => {
-                            let k = auto.to_string();
-                            auto += 1;
-                            OrderedKey(k)
+                            let k = match max_num {
+                                Some(m) => m + 1,
+                                None => 0,
+                            };
+                            OrderedKey(k.to_string())
                         }
                     };
-                    map.insert(key, v);
+                    if let Ok(n) = key.0.parse::<i64>() {
+                        max_num = Some(max_num.map_or(n, |m| m.max(n)));
+                    }
+                    map.insert(key, v);  // перезапись при конфликте — ок
                 }
                 Ok(Flow::Normal(Value::Struct(Rc::new(RefCell::new(map)))))
             }
@@ -136,6 +141,25 @@ impl Interpreter {
                 let v = self.eval_value(value, env)?;
                 env.borrow_mut().assign(name, v)?;
                 Ok(Flow::Normal(Value::Nil))
+            }
+
+            Expr::AssignField { target, key, value } => {
+                let v = self.eval_value(value, env)?;
+                let t = self.eval_value(target, env)?;
+                match (t, key) {
+                    (Value::Struct(s), AssignKey::Field(name)) => {
+                        s.borrow_mut().insert(OrderedKey::from_str(name), v);
+                        Ok(Flow::Normal(Value::Nil))
+                    }
+                    (Value::Struct(s), AssignKey::Index(idx_expr)) => {
+                        let idx = self.eval_value(idx_expr, env)?;
+                        let k = OrderedKey(to_key_string(&idx));
+                        s.borrow_mut().insert(k, v);
+                        Ok(Flow::Normal(Value::Nil))
+                    }
+                    (Value::Tuple(_), _) => Err(msg::rt_assign_field_not_struct("tuple")),
+                    (other, _) => Err(msg::rt_assign_field_not_struct(other.type_name())),
+                }
             }
 
             Expr::Unary { op, operand } => {

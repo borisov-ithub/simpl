@@ -13,7 +13,8 @@ pub enum Expr {
     Let { name: String, mutable: bool, value: Box<Expr> },
     LetTuple { names: Vec<(String, bool)>, value: Box<Expr> },
     Assign { name: String, value: Box<Expr> },
-
+    AssignField { target: Box<Expr>, key: AssignKey, value: Box<Expr> },
+    
     Unary { op: UnaryOp, operand: Box<Expr> },
     Binary { op: BinOp, left: Box<Expr>, right: Box<Expr> },
 
@@ -85,4 +86,10 @@ pub enum BinOp {
     Concat,
     Eq, NotEq, Lt, LtEq, Gt, GtEq,
     And, Or,
+}
+
+#[derive(Debug, Clone)]
+pub enum AssignKey {
+    Field(String),
+    Index(Box<Expr>),
 }

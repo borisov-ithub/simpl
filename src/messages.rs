@@ -440,6 +440,50 @@ pub fn bi_struct_zip_len_mismatch(fname: &str, a: usize, b: usize) -> String {
     format!("{}(): длины кортежей не совпадают ({} и {})", fname, a, b)
 }
 
+pub fn bi_struct_not_array(fname: &str) -> String {
+    format!(
+        "{}(): struct не является массивом (есть нечисловые ключи).\n\
+         Подсказка: используйте struct.from_tuple для создания массива.",
+        fname
+    )
+}
+
+pub fn bi_struct_empty(fname: &str) -> String {
+    format!("{}(): struct пуст", fname)
+}
+
+// ============================================================
+// Присваивание полю
+// ============================================================
+
+pub fn rt_assign_field_not_struct(got: &str) -> String {
+    format!("Присваивание полю применимо к struct, получено {}", got)
+}
+
+pub fn rt_assign_field_missing(path: &str) -> String {
+    format!(
+        "Промежуточное поле '{}' отсутствует или не является struct.\n\
+         Подсказка: создайте вложенный struct сначала.",
+        path
+    )
+}
+
+pub fn parse_bad_assign_target(line: usize, col: usize) -> String {
+    format!(
+        "Строка {}:{}: слева от '=' должно быть поле или индекс (s.field = ... или s[key] = ...).\n\
+         Подсказка: для присваивания переменной используйте ^name = ...",
+        line, col
+    )
+}
+
+pub fn parse_bad_struct_key(line: usize, col: usize) -> String {
+    format!(
+        "Строка {}:{}: ключ struct должен быть именем, строкой или числом.\n\
+         Пример: {{ name = 1, \"key\" = 2, 0 = 3 }}",
+        line, col
+    )
+}
+
 // ============================================================
 // Библиотека tuple
 // ============================================================

@@ -5,13 +5,14 @@ use crate::messages as msg;
 pub struct Parser {
     tokens: Vec<(Token, usize, usize)>,
     pos: usize,
+    in_struct: usize,
 }
 
 type PResult<T> = Result<T, String>;
 
 impl Parser {
     pub fn new(tokens: Vec<(Token, usize, usize)>) -> Self {
-        Self { tokens, pos: 0 }
+        Self { tokens, pos: 0, in_struct: 0 }
     }
 
     pub fn parse_program(&mut self) -> PResult<Block> {
@@ -51,6 +52,10 @@ impl Parser {
             Err(msg::parse_expect(l, c, what, &format!("{:?}", self.peek())))
         }
     }
+    fn skip_newlines(&mut self) {
+        while self.check(&Token::Newline) { self.advance(); }
+    }
+
     fn expect_end(
         &mut self,
         construct: &str,
@@ -71,8 +76,25 @@ impl Parser {
             ))
         }
     }
-    fn skip_newlines(&mut self) {
-        while self.check(&Token::Newline) { self.advance(); }
+
+    fn parse_block_until(&mut self, stops: &[Token]) -> PResult<Block> {
+        let mut block = Vec::new();
+        self.skip_newlines();
+        loop {
+            if stops.iter().any(|s| self.check(s)) || self.check(&Token::Eof) { break; }
+            if self.check(&Token::Use) {
+                let (l, c) = self.loc();
+                return Err(msg::parse_use_only_top_level(l, c));
+            }
+            block.push(self.parse_expr()?);
+            if stops.iter().any(|s| self.check(s)) { break; }
+            if self.check(&Token::Newline) { self.skip_newlines(); }
+            else if !stops.iter().any(|s| self.check(s)) && !self.check(&Token::Eof) {
+                let (l, c) = self.loc();
+                return Err(msg::parse_newline_between_exprs(l, c, &format!("{:?}", self.peek())));
+            }
+        }
+        Ok(block)
     }
 
     fn parse_use(&mut self) -> PResult<Expr> {
@@ -117,31 +139,7 @@ impl Parser {
         Ok(Expr::Use { module, alias, names })
     }
 
-    fn parse_block_until(&mut self, stops: &[Token]) -> PResult<Block> {
-        let mut block = Vec::new();
-        self.skip_newlines();
-        loop {
-            if self.check(&Token::Use) {
-                let (l, c) = self.loc();
-                return Err(msg::parse_use_only_top_level(l, c));
-            }
-            if stops.iter().any(|s| self.check(s)) || self.check(&Token::Eof) { break; }
-            block.push(self.parse_expr()?);
-            if stops.iter().any(|s| self.check(s)) { break; }
-            if self.check(&Token::Newline) { self.skip_newlines(); }
-            else if !stops.iter().any(|s| self.check(s)) && !self.check(&Token::Eof) {
-                let (l, c) = self.loc();
-                return Err(msg::parse_newline_between_exprs(l, c, &format!("{:?}", self.peek())));
-            }
-        }
-        Ok(block)
-    }
-
     pub fn parse_expr(&mut self) -> PResult<Expr> {
-        if self.check(&Token::Use) {
-            let (l, c) = self.loc();
-            return Err(msg::parse_use_only_top_level(l, c));
-        }
         if self.check(&Token::Let) { return self.parse_let(); }
         if self.check(&Token::Return) {
             self.advance();
@@ -176,7 +174,6 @@ impl Parser {
                 let (l, c) = self.loc();
                 return Err(msg::parse_function_not_mutable(l, c));
             }
-            // начало функции — на имени; если нужно, можно на 'let'
             let start = (let_line, let_col);
             let params = self.parse_params()?;
             self.expect(&Token::Eq, &msg::parse_expected_eq_after_params())?;
@@ -293,7 +290,9 @@ impl Parser {
     }
 
     fn parse_assign_or_ternary(&mut self) -> PResult<Expr> {
-        if self.check(&Token::Caret)
+        // ^name = expr — присваивание переменной (только вне struct-литерала)
+        if self.in_struct == 0
+            && self.check(&Token::Caret)
             && matches!(self.tokens.get(self.pos + 1).map(|t| &t.0), Some(Token::Ident(_)))
         {
             self.advance();
@@ -305,14 +304,29 @@ impl Parser {
             let value = self.parse_expr()?;
             return Ok(Expr::Assign { name, value: Box::new(value) });
         }
-        // Присваивание без ^: Ident = ...
-        if let Token::Ident(_) = self.peek() {
-            if matches!(self.tokens.get(self.pos + 1).map(|t| &t.0), Some(Token::Eq)) {
-                let (l, c) = self.loc();
-                return Err(msg::parse_assign_without_caret(l, c));
+
+        // name = expr — ошибка (нужен ^), только вне struct-литерала
+        if self.in_struct == 0 {
+            if let Token::Ident(_) = self.peek() {
+                if matches!(self.tokens.get(self.pos + 1).map(|t| &t.0), Some(Token::Eq)) {
+                    let (l, c) = self.loc();
+                    return Err(msg::parse_assign_without_caret(l, c));
+                }
             }
         }
-        self.parse_ternary()
+
+        let (expr_line, expr_col) = self.loc();
+        let expr = self.parse_ternary()?;
+
+        // Присваивание полю/индексу — только вне struct-литерала
+        if self.in_struct == 0 && self.match_tok(&Token::Eq) {
+            let value = self.parse_expr()?;
+            let (target, key) = decompose_assign_target(expr)
+                .ok_or_else(|| msg::parse_bad_assign_target(expr_line, expr_col))?;
+            return Ok(Expr::AssignField { target, key, value: Box::new(value) });
+        }
+
+        Ok(expr)
     }
 
     fn parse_ternary(&mut self) -> PResult<Expr> {
@@ -321,17 +335,11 @@ impl Parser {
             self.advance();
             let cond = self.parse_or()?;
             self.expect(&Token::Else, &msg::parse_ternary_expected_else())?;
-    
-            // else-ветка парсится как or, а не как ternary:
-            // это запрещает цепочку без скобок, но разрешает вложенный тернарник в скобках.
             let else_expr = self.parse_or()?;
-    
-            // Если после else-выражения снова встретился if — это цепочка без скобок.
             if self.check(&Token::If) {
                 let (l, c) = self.loc();
                 return Err(msg::parse_ternary_chain_forbidden(l, c));
             }
-    
             return Ok(Expr::If {
                 branches: vec![(cond, vec![expr])],
                 else_branch: Some(vec![else_expr]),
@@ -487,6 +495,7 @@ impl Parser {
             Token::Backslash => self.parse_lambda(),
             Token::For => self.parse_for(),
             Token::Loop => self.parse_loop(),
+            Token::Use => Err(msg::parse_use_only_top_level(line, col)),
             other => Err(msg::parse_expected_expr(line, col, &format!("{:?}", other))),
         }
     }
@@ -565,22 +574,27 @@ impl Parser {
     }
 
     fn parse_struct(&mut self) -> PResult<Expr> {
+        self.in_struct += 1;
+        let result = self.parse_struct_inner();
+        self.in_struct -= 1;
+        result
+    }
+
+    fn parse_struct_inner(&mut self) -> PResult<Expr> {
         let mut fields = Vec::new();
         self.skip_newlines();
         if !self.check(&Token::RBrace) {
             loop {
                 self.skip_newlines();
-                let field = if let Token::Ident(_) = self.peek() {
-                    if matches!(self.tokens.get(self.pos + 1).map(|t| &t.0), Some(Token::Eq)) {
-                        let name = match self.advance() { Token::Ident(s) => s, _ => unreachable!() };
-                        self.advance();
-                        let v = self.parse_expr()?;
-                        StructField { key: Some(name), value: v }
-                    } else {
-                        StructField { key: None, value: self.parse_expr()? }
-                    }
+                let first = self.parse_expr()?;
+                let field = if self.match_tok(&Token::Eq) {
+                    let (l, c) = self.loc();
+                    let key = expr_to_struct_key(&first)
+                        .ok_or_else(|| msg::parse_bad_struct_key(l, c))?;
+                    let v = self.parse_expr()?;
+                    StructField { key: Some(key), value: v }
                 } else {
-                    StructField { key: None, value: self.parse_expr()? }
+                    StructField { key: None, value: first }
                 };
                 fields.push(field);
                 self.skip_newlines();
@@ -615,7 +629,7 @@ impl Parser {
     fn parse_for(&mut self) -> PResult<Expr> {
         let (start_line, start_col) = self.loc();
         self.expect(&Token::For, &msg::parse_expected_for())?;
-    
+
         if let Token::Ident(name1) = self.peek().clone() {
             match self.tokens.get(self.pos + 1).map(|t| &t.0) {
                 Some(Token::In) => {
@@ -671,9 +685,7 @@ impl Parser {
         let to = self.parse_expr()?;
         let step = if self.match_tok(&Token::Comma) {
             Some(Box::new(self.parse_expr()?))
-        } else {
-            None
-        };
+        } else { None };
         self.expect(&Token::Do, &msg::parse_expected_do_in_for())?;
         let body = self.parse_block_until(&[Token::End])?;
         Ok(Expr::ForNum { var, from: Box::new(from), to: Box::new(to), step, body })
@@ -748,5 +760,24 @@ impl Parser {
                 Err(msg::parse_expected_pattern(l, c, &format!("{:?}", other)))
             }
         }
+    }
+}
+
+fn decompose_assign_target(expr: Expr) -> Option<(Box<Expr>, AssignKey)> {
+    match expr {
+        Expr::Field { target, name } => Some((target, AssignKey::Field(name))),
+        Expr::Index { target, index } => Some((target, AssignKey::Index(index))),
+        _ => None,
+    }
+}
+
+fn expr_to_struct_key(e: &Expr) -> Option<String> {
+    match e {
+        Expr::Var(name) => Some(name.clone()),
+        Expr::Str(s) => Some(s.clone()),
+        Expr::Number(n) if n.fract() == 0.0 && n.is_finite() => {
+            Some(format!("{}", *n as i64))
+        }
+        _ => None,
     }
 }

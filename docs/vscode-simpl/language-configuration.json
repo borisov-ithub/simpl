@@ -1,22 +1,26 @@
 {
-    "comments": {
-      "lineComment": "--"
-    },
-    "brackets": [
-      ["{", "}"],
-      ["[", "]"],
-      ["(", ")"]
-    ],
-    "autoClosingPairs": [
-      { "open": "{", "close": "}" },
-      { "open": "[", "close": "]" },
-      { "open": "(", "close": ")" },
-      { "open": "\"", "close": "\"", "notIn": ["string"] }
-    ],
-    "surroundingPairs": [
-      ["{", "}"],
-      ["[", "]"],
-      ["(", ")"],
-      ["\"", "\""]
-    ]
+  "comments": {
+    "lineComment": "--"
+  },
+  "brackets": [
+    ["{", "}"],
+    ["[", "]"],
+    ["(", ")"]
+  ],
+  "autoClosingPairs": [
+    { "open": "{", "close": "}" },
+    { "open": "[", "close": "]" },
+    { "open": "(", "close": ")" },
+    { "open": "\"", "close": "\"", "notIn": ["string"] }
+  ],
+  "surroundingPairs": [
+    ["{", "}"],
+    ["[", "]"],
+    ["(", ")"],
+    ["\"", "\""]
+  ],
+  "indentationRules": {
+    "increaseIndentPattern": "^\\s*(let\\s+\\w+\\s*\\(.*\\)\\s*=|if\\b.*\\bthen\\b|for\\b.*\\bdo\\b|loop\\b|match\\b)",
+    "decreaseIndentPattern": "^\\s*(end\\b|elseif\\b|else\\b)"
   }
+}

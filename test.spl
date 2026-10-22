@@ -1,14 +1,22 @@
-let greet (name, greeting = "Привет") = greeting ++ ", " ++ name end
-echo. greet("Аня")
-echo. greet("Аня", "Здравствуй")
-
-let inc (x, by = 1) = x + by end
-echo. inc(10)
-echo. inc(10, 5)
-
-let add (a, b = a + 1) = a + b end
-echo. add(3)
-
-let collect (a = 0, *rest) = (a, rest) end
-echo. collect()
-echo. collect(1, 2, 3)
+-- Проверка подсветки
+let add (a, b) = a + b end
+    let ^counter = 0
+    let f = \(x) = x * 2 end
+    
+    echo "без перевода"
+    echo. "с переводом"
+    
+    use string (*)
+    echo. upper("abc"), trim("  hi  ")
+    
+    let person = { name = "Аня", age = 12 }
+    person.name = "Маша"
+    
+    for i = 1, 3 do
+        echo. i
+    end
+    
+    match person.age
+        n if n > 18 -> "взрослый"
+        _ -> "ребёнок"
+    end

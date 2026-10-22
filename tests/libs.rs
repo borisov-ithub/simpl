@@ -452,21 +452,19 @@ fn struct_has() {
 
 #[test]
 fn struct_merge() {
-    let src = "let a = { x = 1 }\nlet b = { y = 2 }\nlet m = struct.merge(a, b)\necho. m.x, m.y";
+    let src = "let a = { x = 1 }\nlet b = { y = 2 }\nstruct.merge(a, b)\necho. a.x, a.y";
     assert_eq!(run(src), "1 2\n");
 }
 
 #[test]
 fn struct_merge_overwrites() {
-    assert_eq!(
-        run("let a = { x = 1 }\nlet b = { x = 2 }\necho. struct.merge(a, b).x"),
-        "2\n"
-    );
+    let src = "let a = { x = 1 }\nlet b = { x = 2 }\nstruct.merge(a, b)\necho. a.x";
+    assert_eq!(run(src), "2\n");
 }
 
 #[test]
 fn struct_remove() {
-    let src = "let s = { a = 1, b = 2 }\nlet r = struct.remove(s, \"a\")\necho. struct.has(r, \"a\"), r.b";
+    let src = "let s = { a = 1, b = 2 }\nstruct.remove(s, \"a\")\necho. struct.has(s, \"a\"), s.b";
     assert_eq!(run(src), "false 2\n");
 }
 
@@ -489,6 +487,87 @@ fn struct_zip() {
     let src = "let s = struct.zip((\"a\", \"b\"), (1, 2))\necho. s.a, s.b";
     assert_eq!(run(src), "1 2\n");
 }
+
+#[test]
+fn struct_get() {
+    assert_eq!(run("echo. struct.get({ a = 1 }, \"a\"), struct.get({ a = 1 }, \"b\", 0)"), "1 0\n");
+}
+
+#[test]
+fn struct_push_pop() {
+    let src = "let s = { 1, 2 }\nstruct.push(s, 3)\necho. struct.values(s)\nlet v = struct.pop(s)\necho. struct.values(s), v";
+    assert_eq!(run(src), "(1, 2, 3)\n(1, 2) 3\n");
+}
+
+#[test]
+fn struct_unshift_shift() {
+    let src = "let s = { 1, 2 }\nstruct.unshift(s, 0)\necho. struct.values(s)\nlet v = struct.shift(s)\necho. struct.values(s), v";
+    assert_eq!(run(src), "(0, 1, 2)\n(1, 2) 0\n");
+}
+
+#[test]
+fn struct_push_non_array_error() {
+    let e = run_err("let s = { a = 1 }\nstruct.push(s, 2)");
+    assert!(e.contains("не является массивом"), "сообщение: {}", e);
+}
+
+#[test]
+fn struct_pop_empty_error() {
+    let e = run_err("struct.pop({})");
+    assert!(e.contains("пуст"), "сообщение: {}", e);
+}
+
+#[test]
+fn assign_field() {
+    let src = "let s = { a = 1 }\ns.a = 10\necho. s.a";
+    assert_eq!(run(src), "10\n");
+}
+
+#[test]
+fn assign_field_index() {
+    let src = "let s = { 1, 2 }\ns[0] = 10\necho. s[0]";
+    assert_eq!(run(src), "10\n");
+}
+
+#[test]
+fn assign_field_chain() {
+    let src = "let s = { a = { b = 1 } }\ns.a.b = 5\necho. s.a.b";
+    assert_eq!(run(src), "5\n");
+}
+
+#[test]
+fn assign_field_new_key() {
+    let src = "let s = { a = 1 }\ns.b = 2\necho. s.b";
+    assert_eq!(run(src), "2\n");
+}
+
+#[test]
+fn assign_field_on_tuple_error() {
+    let e = run_err("let t = (1, 2)\nt[0] = 5");
+    assert!(e.contains("struct"), "сообщение: {}", e);
+}
+
+#[test]
+fn struct_auto_keys_after_number() {
+    assert_eq!(
+        run("echo. struct.values({ 1 = \"a\", \"b\" })"),
+        "(a, b)\n"
+    );
+    assert_eq!(
+        run("echo. struct.keys({ 1 = \"a\", \"b\" })"),
+        "(1, 2)\n"
+    );
+}
+
+#[test]
+fn struct_auto_keys_conflict_overwrites() {
+    // { 1="a", "b", 2="c" } → "b" получит 2, потом 2="c" перезапишет
+    assert_eq!(
+        run("echo. struct.values({ 1 = \"a\", \"b\", 2 = \"c\" })"),
+        "(a, c)\n"
+    );
+}
+
 // ============================================================
 // file
 // ============================================================
