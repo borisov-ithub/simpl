@@ -8,6 +8,7 @@ pub mod lexer;
 pub mod messages;
 pub mod parser;
 pub mod value;
+pub mod repl;
 
 pub fn run_source(src: &str) -> Result<(), String> {
     run_source_with_path(src, None)

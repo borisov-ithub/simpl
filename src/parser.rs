@@ -404,6 +404,7 @@ impl Parser {
         if self.in_struct == 0
             && self.check(&Token::Caret)
             && matches!(self.tokens.get(self.pos + 1).map(|t| &t.0), Some(Token::Ident(_)))
+            && matches!(self.tokens.get(self.pos + 2).map(|t| &t.0), Some(Token::Eq))
         {
             self.advance();
             let name = match self.advance() {
@@ -606,6 +607,16 @@ impl Parser {
             Token::For => self.parse_for(),
             Token::Loop => self.parse_loop(),
             Token::Use => Err(msg::parse_use_only_top_level(line, col)),
+            Token::Caret => {
+                self.advance(); // ^
+                match self.advance() {
+                    Token::Ident(s) => Ok(Expr::Var(s)),
+                    other => {
+                        let (l, c) = self.loc();
+                        Err(msg::parse_expected_expr(l, c, &format!("{:?}", other)))
+                    }
+                }
+            }
             other => Err(msg::parse_expected_expr(line, col, &format!("{:?}", other))),
         }
     }

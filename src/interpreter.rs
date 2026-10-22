@@ -64,7 +64,7 @@ impl Interpreter {
             Expr::Str(s) => Ok(Flow::Normal(Value::Str(s.clone()))),
             Expr::Bool(b) => Ok(Flow::Normal(Value::Bool(*b))),
             Expr::Nil => Ok(Flow::Normal(Value::Nil)),
-
+            
             Expr::Interpolated(parts) => {
                 let mut s = String::new();
                 for p in parts {

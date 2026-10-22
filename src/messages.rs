@@ -778,3 +778,40 @@ pub fn parse_import_requires_names(path: &str) -> String {
         path, path, path, path
     )
 }
+
+// ============================================================
+// REPL
+// ============================================================
+
+pub fn repl_help() -> String {
+    "\
+Команды:
+  :q, :quit        выйти
+  :h, :help        эта справка
+  :reset           сбросить окружение
+  :load <file>     выполнить файл в текущем окружении
+
+Ввод:
+  Многострочные конструкции (if, for, let ... (...), match) — продолжение
+  вводится с приглашением '... '. Закончите 'end'.
+  
+  Результат последнего выражения печатается (включая nil).
+"
+    .to_string()
+}
+
+pub fn repl_unknown_command(cmd: &str) -> String {
+    format!("Неизвестная команда: {}", cmd)
+}
+
+pub fn repl_load_usage() -> String {
+    "Использование: :load <file>".to_string()
+}
+
+pub fn repl_load_error(path: &str, err: &std::io::Error) -> String {
+    format!(":load: не удалось прочитать '{}': {}", path, err)
+}
+
+pub fn repl_reset_ok() -> String {
+    "Окружение сброшено.".to_string()
+}

@@ -20,8 +20,11 @@ fn main() {
                 return;
             }
             "-r" | "--repl" => {
-                eprintln!("{}", simpl::messages::cli_repl_not_implemented());
-                std::process::exit(2);
+                if let Err(e) = simpl::repl::run() {
+                    eprintln!("{}", e);
+                    std::process::exit(1);
+                }
+                return;
             }
             "-c" | "--check" => {
                 check_only = true;
