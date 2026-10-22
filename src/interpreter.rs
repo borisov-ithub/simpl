@@ -12,6 +12,7 @@ use crate::value::{Function, OrderedKey, StructMap, Value};
 pub struct Interpreter {
     pub globals: EnvRef,
     pub out: Rc<RefCell<Vec<u8>>>,
+    pub echo_to_stdout: bool,
     pub current_file: Option<PathBuf>,
     pub module_cache: Rc<RefCell<HashMap<PathBuf, Value>>>,
     pub loading: Rc<RefCell<HashSet<PathBuf>>>,
@@ -32,6 +33,7 @@ impl Interpreter {
         Self {
             globals: Env::new(),
             out: Rc::new(RefCell::new(Vec::new())),
+            echo_to_stdout: false,
             current_file: None,
             module_cache: Rc::new(RefCell::new(HashMap::new())),
             loading: Rc::new(RefCell::new(HashSet::new())),
@@ -365,7 +367,13 @@ impl Interpreter {
                 if *newline {
                     s.push('\n');
                 }
-                self.out.borrow_mut().extend_from_slice(s.as_bytes());
+                if self.echo_to_stdout {
+                    print!("{}", s);
+                    use std::io::Write;
+                    let _ = std::io::stdout().flush();
+                } else {
+                    self.out.borrow_mut().extend_from_slice(s.as_bytes());
+                }
                 Ok(Flow::Normal(Value::Nil))
             }
 
