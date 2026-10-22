@@ -121,6 +121,107 @@ fn string_split_empty_sep_error() {
     assert!(e.contains("пустой строкой"), "сообщение: {}", e);
 }
 
+#[test]
+fn string_ltrim_rtrim() {
+    assert_eq!(
+        run("echo. \"[\" ++ string.ltrim(\"  hi  \") ++ \"]\", \"[\" ++ string.rtrim(\"  hi  \") ++ \"]\""),
+        "[hi  ] [  hi]\n"
+    );
+}
+
+#[test]
+fn string_capitalize() {
+    assert_eq!(run("echo. string.capitalize(\"hELLO\")"), "Hello\n");
+    assert_eq!(run("echo. string.capitalize(\"\")"), "\n");
+}
+
+#[test]
+fn string_swap_case() {
+    assert_eq!(run("echo. string.swap_case(\"Hello World\")"), "hELLO wORLD\n");
+}
+
+#[test]
+fn string_title() {
+    assert_eq!(run("echo. string.title(\"hello world\")"), "Hello World\n");
+    assert_eq!(run("echo. string.title(\"hELLO wORLD\")"), "Hello World\n");
+}
+
+#[test]
+fn string_count_overlapping() {
+    assert_eq!(run("echo. string.count(\"aaa\", \"aa\")"), "2\n");
+    assert_eq!(run("echo. string.count(\"abcabc\", \"abc\")"), "2\n");
+    assert_eq!(run("echo. string.count(\"abc\", \"z\")"), "0\n");
+}
+
+#[test]
+fn string_count_empty_sub_error() {
+    let e = run_err("string.count(\"abc\", \"\")");
+    assert!(e.contains("не может быть пустой"), "сообщение: {}", e);
+}
+
+#[test]
+fn string_replace() {
+    assert_eq!(run("echo. string.replace(\"abcabc\", \"b\", \"X\")"), "(aXcaXc, 2)\n");
+}
+
+#[test]
+fn string_replace_to_empty() {
+    assert_eq!(run("echo. string.replace(\"abc\", \"b\", \"\")"), "(ac, 1)\n");
+}
+
+#[test]
+fn string_replace_empty_from_noop() {
+    assert_eq!(run("echo. string.replace(\"abc\", \"\", \"x\")"), "(abc, 0)\n");
+}
+
+#[test]
+fn string_is_upper() {
+    assert_eq!(
+        run("echo. string.is_upper(\"ABC\"), string.is_upper(\"Abc\"), string.is_upper(\"\"), string.is_upper(\"123\")"),
+        "true false false false\n"
+    );
+}
+
+#[test]
+fn string_is_lower() {
+    assert_eq!(
+        run("echo. string.is_lower(\"abc\"), string.is_lower(\"Abc\"), string.is_lower(\"\"), string.is_lower(\"123\")"),
+        "true false false false\n"
+    );
+}
+
+#[test]
+fn string_is_alnum() {
+    assert_eq!(
+        run("echo. string.is_alnum(\"abc123\"), string.is_alnum(\"abc 123\"), string.is_alnum(\"\")"),
+        "true false false\n"
+    );
+}
+
+#[test]
+fn string_is_alpha() {
+    assert_eq!(
+        run("echo. string.is_alpha(\"abc\"), string.is_alpha(\"abc1\"), string.is_alpha(\"\")"),
+        "true false false\n"
+    );
+}
+
+#[test]
+fn string_is_numeric() {
+    assert_eq!(
+        run("echo. string.is_numeric(\"123\"), string.is_numeric(\"12.3\"), string.is_numeric(\"\")"),
+        "true false false\n"
+    );
+}
+
+#[test]
+fn string_is_decimal() {
+    assert_eq!(
+        run("echo. string.is_decimal(\"3.14\"), string.is_decimal(\"3\"), string.is_decimal(\".5\"), string.is_decimal(\"3.\"), string.is_decimal(\"3.1.4\")"),
+        "true false false false false\n"
+    );
+}
+
 // ============================================================
 // math
 // ============================================================
@@ -162,6 +263,37 @@ fn math_min_empty_error() {
 fn math_random_range() {
     let src = "let ^ok = true\nfor i = 1, 100 do\nlet r = math.random(10)\nif r < 0 then ^ok = false end\nif r >= 10 then ^ok = false end\nend\necho. ok";
     assert_eq!(run(src), "true\n");
+}
+
+#[test]
+fn math_round_with_digits() {
+    assert_eq!(run("echo. math.round(2.567, 2)"), "2.57\n");
+    assert_eq!(run("echo. math.round(2.5)"), "3\n");
+    assert_eq!(run("echo. math.round(2.4)"), "2\n");
+}
+
+#[test]
+fn math_round_negative_digits_error() {
+    let e = run_err("math.round(2.5, -1)");
+    assert!(e.contains("не может быть отрицательным"), "сообщение: {}", e);
+}
+
+#[test]
+fn math_log() {
+    assert_eq!(run("echo. math.log(8, 2)"), "3\n");
+    assert_eq!(run("echo. math.log(100, 10)"), "2\n");
+}
+
+#[test]
+fn math_log_bad_arg_error() {
+    let e = run_err("math.log(0, 2)");
+    assert!(e.contains("аргумент должен быть > 0"), "сообщение: {}", e);
+}
+
+#[test]
+fn math_log_bad_base_error() {
+    let e = run_err("math.log(8, 1)");
+    assert!(e.contains("основание должно быть > 0 и != 1"), "сообщение: {}", e);
 }
 
 // ============================================================
@@ -404,6 +536,68 @@ fn file_read_missing_error() {
     assert!(e.contains("не удалось прочитать"), "сообщение: {}", e);
 }
 
+#[test]
+fn file_remove() {
+    let path = tmp_path("remove");
+    let src = format!(
+        "file.write(\"{p}\", \"x\")\nfile.remove(\"{p}\")\necho. file.exists(\"{p}\")",
+        p = path
+    );
+    assert_eq!(run(&src), "false\n");
+}
+
+#[test]
+fn file_remove_missing_error() {
+    let path = tmp_path("remove_missing");
+    let _ = std::fs::remove_file(&path);
+    let src = format!("file.remove(\"{}\")", path);
+    let e = run_err(&src);
+    assert!(e.contains("не существует"), "сообщение: {}", e);
+}
+
+#[test]
+fn file_read_lines() {
+    let path = tmp_path("read_lines");
+    let src = format!(
+        "file.write(\"{p}\", \"a\\nb\\nc\\n\")\necho. file.read_lines(\"{p}\")",
+        p = path
+    );
+    assert_eq!(run(&src), "(a, b, c)\n");
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn file_read_lines_no_trailing_newline() {
+    let path = tmp_path("read_lines2");
+    let src = format!(
+        "file.write(\"{p}\", \"a\\nb\")\necho. file.read_lines(\"{p}\")",
+        p = path
+    );
+    assert_eq!(run(&src), "(a, b)\n");
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn file_read_lines_empty() {
+    let path = tmp_path("read_lines_empty");
+    let src = format!(
+        "file.write(\"{p}\", \"\")\necho. file.read_lines(\"{p}\")",
+        p = path
+    );
+    assert_eq!(run(&src), "()\n");
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn file_read_lines_crlf() {
+    let path = tmp_path("read_lines_crlf");
+    // пишем через Rust, чтобы гарантировать \r\n
+    std::fs::write(&path, "a\r\nb\r\n").unwrap();
+    let src = format!("echo. file.read_lines(\"{}\")", path);
+    assert_eq!(run(&src), "(a, b)\n");
+    let _ = std::fs::remove_file(&path);
+}
+
 // ============================================================
 // datetime
 // ============================================================
@@ -431,4 +625,28 @@ fn datetime_timestamp_roundtrip() {
 fn datetime_bad_struct_error() {
     let e = run_err("datetime.format({ year = 2026 }, \"%Y\")");
     assert!(e.contains("должно быть числом"), "сообщение: {}", e);
+}
+
+#[test]
+fn datetime_mktime_full() {
+    let src = "echo. datetime.format(datetime.mktime(2026, 10, 21, 14, 30, 0), \"%Y-%m-%d %H:%M:%S\")";
+    assert_eq!(run(src), "2026-10-21 14:30:00\n");
+}
+
+#[test]
+fn datetime_mktime_defaults() {
+    let src = "echo. datetime.format(datetime.mktime(2026), \"%Y-%m-%d %H:%M:%S\")";
+    assert_eq!(run(src), "2026-01-01 00:00:00\n");
+}
+
+#[test]
+fn datetime_mktime_partial() {
+    let src = "echo. datetime.format(datetime.mktime(2026, 5), \"%Y-%m-%d %H:%M:%S\")";
+    assert_eq!(run(src), "2026-05-01 00:00:00\n");
+}
+
+#[test]
+fn datetime_mktime_bad_date_error() {
+    let e = run_err("datetime.mktime(2026, 13, 1)");
+    assert!(e.contains("некорректн"), "сообщение: {}", e);
 }

@@ -1,6 +1,3 @@
-use std::cell::RefCell;
-use std::rc::Rc;
-
 use rand::Rng;
 
 use crate::interpreter::{Interpreter, IResult};
@@ -12,8 +9,9 @@ pub fn call(_interp: &mut Interpreter, name: &str, args: Vec<Value>) -> IResult<
         "abs" => num_map1(args, "math.abs", |x| x.abs()),
         "floor" => num_map1(args, "math.floor", |x| x.floor()),
         "ceil" => num_map1(args, "math.ceil", |x| x.ceil()),
-        "round" => num_map1(args, "math.round", |x| x.round()),
+        "round" => call_round(args),
         "sqrt" => call_sqrt(args),
+        "log" => call_log(args),
         "min" => call_minmax(args, true),
         "max" => call_minmax(args, false),
         "random" => call_random(args),
@@ -29,12 +27,34 @@ fn as_num(v: &Value, fname: &str) -> IResult<f64> {
     }
 }
 
+fn as_int(v: &Value, fname: &str) -> IResult<i64> {
+    match v {
+        Value::Number(n) if n.fract() == 0.0 && n.is_finite() => Ok(*n as i64),
+        other => Err(msg::bi_bad_type(fname, "целое число", other.type_name())),
+    }
+}
+
 fn num_map1<F: Fn(f64) -> f64>(args: Vec<Value>, fname: &str, f: F) -> IResult<Value> {
     if args.len() != 1 {
         return Err(msg::bi_arity(fname, 1, args.len()));
     }
     let x = as_num(&args[0], fname)?;
     Ok(Value::Number(f(x)))
+}
+
+fn call_round(args: Vec<Value>) -> IResult<Value> {
+    let fname = "math.round";
+    if args.is_empty() || args.len() > 2 {
+        return Err(msg::bi_arity_range(fname, 1, 2, args.len()));
+    }
+    let x = as_num(&args[0], fname)?;
+    let digits = if args.len() == 2 { as_int(&args[1], fname)? } else { 0 };
+    if digits < 0 {
+        return Err(msg::bi_math_round_negative_digits(digits));
+    }
+    let factor = 10f64.powi(digits as i32);
+    let rounded = (x * factor).round() / factor;
+    Ok(Value::Number(rounded))
 }
 
 fn call_sqrt(args: Vec<Value>) -> IResult<Value> {
@@ -47,6 +67,22 @@ fn call_sqrt(args: Vec<Value>) -> IResult<Value> {
         return Err(msg::bi_math_sqrt_negative());
     }
     Ok(Value::Number(x.sqrt()))
+}
+
+fn call_log(args: Vec<Value>) -> IResult<Value> {
+    let fname = "math.log";
+    if args.len() != 2 {
+        return Err(msg::bi_arity(fname, 2, args.len()));
+    }
+    let x = as_num(&args[0], fname)?;
+    let base = as_num(&args[1], fname)?;
+    if x <= 0.0 {
+        return Err(msg::bi_math_log_bad_arg(x));
+    }
+    if base <= 0.0 || base == 1.0 {
+        return Err(msg::bi_math_log_bad_base(base));
+    }
+    Ok(Value::Number(x.log(base)))
 }
 
 fn call_minmax(args: Vec<Value>, is_min: bool) -> IResult<Value> {
@@ -88,19 +124,10 @@ fn call_random(args: Vec<Value>) -> IResult<Value> {
 }
 
 fn call_randomseed(args: Vec<Value>) -> IResult<Value> {
-    // rand 0.8 не позволяет задать глобальный seed через thread_rng.
-    // Для учебных целей randomseed — no-op; можно потом перейти на StdRng.
     let fname = "math.randomseed";
     if args.len() != 1 {
         return Err(msg::bi_arity(fname, 1, args.len()));
     }
     let _ = as_num(&args[0], fname)?;
     Ok(Value::Nil)
-}
-
-// подавляем предупреждение о неиспользуемых импортах
-#[allow(dead_code)]
-fn _unused() {
-    let _ = RefCell::new(Vec::<Value>::new());
-    let _ = Rc::new(0);
 }

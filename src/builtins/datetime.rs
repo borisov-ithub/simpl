@@ -13,6 +13,7 @@ pub fn call(_interp: &mut Interpreter, name: &str, args: Vec<Value>) -> IResult<
         "format" => call_format(args),
         "timestamp" => call_timestamp(args),
         "from_timestamp" => call_from_timestamp(args),
+        "mktime" => call_mktime(args),
         _ => Err(msg::bi_unknown(&format!("datetime.{}", name))),
     }
 }
@@ -104,5 +105,35 @@ fn call_from_timestamp(args: Vec<Value>) -> IResult<Value> {
         .single()
         .ok_or_else(msg::bi_datetime_bad_timestamp)?
         .naive_local();
+    Ok(dt_to_struct(&dt))
+}
+
+fn call_mktime(args: Vec<Value>) -> IResult<Value> {
+    let fname = "datetime.mktime";
+    if args.is_empty() || args.len() > 6 {
+        return Err(msg::bi_arity_range(fname, 1, 6, args.len()));
+    }
+    let get_int = |i: usize, default: i32| -> IResult<i32> {
+        if i < args.len() {
+            match &args[i] {
+                Value::Number(n) if n.fract() == 0.0 && n.is_finite() => Ok(*n as i32),
+                other => Err(msg::bi_datetime_mktime_bad(
+                    &["year", "month", "day", "hour", "min", "sec"][i],
+                    other.type_name(),
+                )),
+            }
+        } else {
+            Ok(default)
+        }
+    };
+    let year = get_int(0, 0)?;
+    let month = get_int(1, 1)? as u32;
+    let day = get_int(2, 1)? as u32;
+    let hour = get_int(3, 0)? as u32;
+    let min = get_int(4, 0)? as u32;
+    let sec = get_int(5, 0)? as u32;
+    let dt = chrono::NaiveDate::from_ymd_opt(year, month, day)
+        .and_then(|d| d.and_hms_opt(hour, min, sec))
+        .ok_or_else(|| msg::bi_datetime_mktime_bad("дата", "некорректная"))?;
     Ok(dt_to_struct(&dt))
 }

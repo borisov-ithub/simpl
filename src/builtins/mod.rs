@@ -31,6 +31,19 @@ pub fn register(globals: &mut HashMap<String, (Value, bool)>) {
             ("ends_with", "string.ends_with"),
             ("chars", "string.chars"),
             ("from_tuple", "string.from_tuple"),
+            ("ltrim", "string.ltrim"),
+            ("rtrim", "string.rtrim"),
+            ("capitalize", "string.capitalize"),
+            ("swap_case", "string.swap_case"),
+            ("title", "string.title"),
+            ("count", "string.count"),
+            ("replace", "string.replace"),
+            ("is_upper", "string.is_upper"),
+            ("is_lower", "string.is_lower"),
+            ("is_alnum", "string.is_alnum"),
+            ("is_alpha", "string.is_alpha"),
+            ("is_decimal", "string.is_decimal"),
+            ("is_numeric", "string.is_numeric"),
         ]),
         ("math", &[
             ("abs", "math.abs"),
@@ -42,6 +55,7 @@ pub fn register(globals: &mut HashMap<String, (Value, bool)>) {
             ("max", "math.max"),
             ("random", "math.random"),
             ("randomseed", "math.randomseed"),
+            ("log", "math.log"),
         ]),
         ("iter", &[
             ("map", "iter.map"),
@@ -75,12 +89,15 @@ pub fn register(globals: &mut HashMap<String, (Value, bool)>) {
             ("write", "file.write"),
             ("append", "file.append"),
             ("exists", "file.exists"),
+            ("remove", "file.remove"),
+            ("read_lines", "file.read_lines"),
         ]),
         ("datetime", &[
             ("now", "datetime.now"),
             ("format", "datetime.format"),
             ("timestamp", "datetime.timestamp"),
             ("from_timestamp", "datetime.from_timestamp"),
+            ("mktime", "datetime.mktime"),
         ]),
     ];
 

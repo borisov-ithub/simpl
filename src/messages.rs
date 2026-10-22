@@ -387,6 +387,10 @@ pub fn bi_string_empty_sep() -> String {
     "string.split(): разделитель не может быть пустой строкой".to_string()
 }
 
+pub fn bi_string_count_empty_sub() -> String {
+    "string.count(): подстрока не может быть пустой".to_string()
+}
+
 // ============================================================
 // Библиотека math
 // ============================================================
@@ -397,6 +401,18 @@ pub fn bi_math_sqrt_negative() -> String {
 
 pub fn bi_math_empty_args() -> String {
     "math.min()/math.max(): нужен хотя бы один аргумент".to_string()
+}
+
+pub fn bi_math_round_negative_digits(n: i64) -> String {
+    format!("math.round(): num не может быть отрицательным, получено {}", n)
+}
+
+pub fn bi_math_log_bad_base(base: f64) -> String {
+    format!("math.log(): основание должно быть > 0 и != 1, получено {}", base)
+}
+
+pub fn bi_math_log_bad_arg(x: f64) -> String {
+    format!("math.log(): аргумент должен быть > 0, получено {}", x)
 }
 
 // ============================================================
@@ -448,6 +464,18 @@ pub fn bi_file_append_error(path: &str, err: &std::io::Error) -> String {
     format!("file.append(): не удалось дописать '{}': {}", path, err)
 }
 
+pub fn bi_file_remove_error(path: &str, err: &std::io::Error) -> String {
+    format!("file.remove(): не удалось удалить '{}': {}", path, err)
+}
+
+pub fn bi_file_remove_missing(path: &str) -> String {
+    format!("file.remove(): файл '{}' не существует", path)
+}
+
+pub fn bi_file_read_lines_error(path: &str, err: &std::io::Error) -> String {
+    format!("file.read_lines(): не удалось прочитать '{}': {}", path, err)
+}
+
 // ============================================================
 // Библиотека datetime
 // ============================================================
@@ -458,6 +486,10 @@ pub fn bi_datetime_bad_timestamp() -> String {
 
 pub fn bi_datetime_bad_struct(field: &str) -> String {
     format!("datetime: поле '{}' должно быть числом", field)
+}
+
+pub fn bi_datetime_mktime_bad(field: &str, got: &str) -> String {
+    format!("datetime.mktime(): некорректное поле '{}': {}", field, got)
 }
 
 // ============================================================
