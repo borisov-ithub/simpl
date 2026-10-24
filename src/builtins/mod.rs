@@ -79,6 +79,8 @@ pub fn register(globals: &mut HashMap<String, (Value, bool)>) {
             ("pop", "struct.pop"),
             ("unshift", "struct.unshift"),
             ("shift", "struct.shift"),
+            ("insert_at", "struct.insert_at"),
+            ("remove_at", "struct.remove_at"),
         ]),
         ("tuple", &[
             ("get", "tuple.get"),

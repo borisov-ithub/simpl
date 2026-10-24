@@ -1,6 +1,6 @@
 # Simpl — справочник по языку
 
-Версия 2.2.0.
+Версия 2.2.2.
 
 ## 1. Общее
 
@@ -624,6 +624,8 @@ let t = type x       -- t = "number"
 | `struct.from_tuple(t)` | Новый struct с ключами `0, 1, 2, ...` |
 | `struct.from_pairs(t)` | Новый struct из кортежа пар `(key, value)` |
 | `struct.zip(keys, values)` | Новый struct из двух кортежей одинаковой длины |
+| `struct.insert_at(s, index, value)` | **Мутирует** `s`: вставить `value` перед элементом на позиции `index`, сдвинув остальные на +1. `index == len(s)` — эквивалент `push`. Только для struct-массивов |
+| `struct.remove_at(s, index)` | **Мутирует** `s`: удалить элемент на позиции `index`, сдвинув остальные на −1; вернуть удалённое. Только для struct-массивов |
 
 **Struct-массив** — struct, у которого все ключи — числа. `struct.push`/`pop`/`shift`/`unshift` работают только с ним. На `{ a = 1 }` — ошибка.
 

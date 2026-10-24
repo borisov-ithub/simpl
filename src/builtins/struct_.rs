@@ -21,6 +21,8 @@ pub fn call(_interp: &mut Interpreter, name: &str, args: Vec<Value>) -> IResult<
         "pop" => call_pop(args),
         "unshift" => call_unshift(args),
         "shift" => call_shift(args),
+        "insert_at" => call_insert_at(args),
+        "remove_at" => call_remove_at(args),
         _ => Err(msg::bi_unknown(&format!("struct.{}", name))),
     }
 }
@@ -238,4 +240,69 @@ fn call_shift(args: Vec<Value>) -> IResult<Value> {
         guard.insert(OrderedKey((k - 1).to_string()), v);
     }
     Ok(first)
+}
+
+fn call_insert_at(args: Vec<Value>) -> IResult<Value> {
+    let fname = "struct.insert_at";
+    if args.len() != 3 {
+        return Err(msg::bi_arity(fname, 3, args.len()));
+    }
+    let s = as_struct(&args[0], fname)?;
+    let keys = numeric_keys(&s.borrow(), fname)?;
+    let index = match &args[1] {
+        Value::Number(n) if *n >= 0.0 && n.fract() == 0.0 => *n as i64,
+        other => {
+            return Err(msg::bi_bad_type(
+                fname,
+                "неотрицательный целый индекс",
+                other.type_name(),
+            ))
+        }
+    };
+    if index > keys.len() as i64 {
+        return Err(msg::bi_index_out_of_bounds(fname, index as usize, keys.len()));
+    }
+    let mut guard = s.borrow_mut();
+    for k in keys.iter().rev() {
+        if *k >= index {
+            let v = guard.remove(&OrderedKey(k.to_string())).unwrap();
+            guard.insert(OrderedKey((k + 1).to_string()), v);
+        }
+    }
+    guard.insert(OrderedKey(index.to_string()), args[2].clone());
+    Ok(Value::Nil)
+}
+
+fn call_remove_at(args: Vec<Value>) -> IResult<Value> {
+    let fname = "struct.remove_at";
+    if args.len() != 2 {
+        return Err(msg::bi_arity(fname, 2, args.len()));
+    }
+    let s = as_struct(&args[0], fname)?;
+    let keys = numeric_keys(&s.borrow(), fname)?;
+    if keys.is_empty() {
+        return Err(msg::bi_struct_empty(fname));
+    }
+    let index = match &args[1] {
+        Value::Number(n) if *n >= 0.0 && n.fract() == 0.0 => *n as i64,
+        other => {
+            return Err(msg::bi_bad_type(
+                fname,
+                "неотрицательный целый индекс",
+                other.type_name(),
+            ))
+        }
+    };
+    if index >= keys.len() as i64 {
+        return Err(msg::bi_index_out_of_bounds(fname, index as usize, keys.len()));
+    }
+    let mut guard = s.borrow_mut();
+    let removed = guard.remove(&OrderedKey(index.to_string())).unwrap();
+    for k in keys.iter() {
+        if *k > index {
+            let v = guard.remove(&OrderedKey(k.to_string())).unwrap();
+            guard.insert(OrderedKey((k - 1).to_string()), v);
+        }
+    }
+    Ok(removed)
 }

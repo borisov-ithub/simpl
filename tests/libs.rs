@@ -574,6 +574,66 @@ fn struct_auto_keys_conflict_overwrites() {
     );
 }
 
+#[test]
+fn struct_insert_at_middle() {
+    let src = "let s = { 1, 2, 3, 4 }\nstruct.insert_at(s, 2, 99)\necho. struct.values(s)";
+    assert_eq!(run(src), "(1, 2, 99, 3, 4)\n");
+}
+
+#[test]
+fn struct_insert_at_start() {
+    let src = "let s = { 1, 2 }\nstruct.insert_at(s, 0, 0)\necho. struct.values(s)";
+    assert_eq!(run(src), "(0, 1, 2)\n");
+}
+
+#[test]
+fn struct_insert_at_end() {
+    let src = "let s = { 1, 2 }\nstruct.insert_at(s, 2, 3)\necho. struct.values(s)";
+    assert_eq!(run(src), "(1, 2, 3)\n");
+}
+
+#[test]
+fn struct_insert_at_out_of_bounds_error() {
+    let e = run_err("let s = { 1, 2 }\nstruct.insert_at(s, 5, 9)");
+    assert!(e.contains("вне длины"), "сообщение: {}", e);
+}
+
+#[test]
+fn struct_insert_at_non_array_error() {
+    let e = run_err("let s = { a = 1 }\nstruct.insert_at(s, 0, 2)");
+    assert!(e.contains("не является массивом"), "сообщение: {}", e);
+}
+
+#[test]
+fn struct_remove_at_middle() {
+    let src = "let s = { 1, 2, 3, 4 }\nlet v = struct.remove_at(s, 2)\necho. struct.values(s), v";
+    assert_eq!(run(src), "(1, 2, 4) 3\n");
+}
+
+#[test]
+fn struct_remove_at_start() {
+    let src = "let s = { 1, 2, 3 }\nlet v = struct.remove_at(s, 0)\necho. struct.values(s), v";
+    assert_eq!(run(src), "(2, 3) 1\n");
+}
+
+#[test]
+fn struct_remove_at_end() {
+    let src = "let s = { 1, 2, 3 }\nlet v = struct.remove_at(s, 2)\necho. struct.values(s), v";
+    assert_eq!(run(src), "(1, 2) 3\n");
+}
+
+#[test]
+fn struct_remove_at_out_of_bounds_error() {
+    let e = run_err("let s = { 1, 2 }\nstruct.remove_at(s, 5)");
+    assert!(e.contains("вне длины"), "сообщение: {}", e);
+}
+
+#[test]
+fn struct_remove_at_empty_error() {
+    let e = run_err("struct.remove_at({}, 0)");
+    assert!(e.contains("пуст"), "сообщение: {}", e);
+}
+
 // ============================================================
 // file
 // ============================================================
