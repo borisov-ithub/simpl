@@ -8,13 +8,19 @@ pub mod parser;
 pub mod repl;
 pub mod value;
 
+use std::cell::RefCell;
 use std::path::PathBuf;
+use std::rc::Rc;
 
 pub fn run_source(src: &str) -> Result<(), String> {
-    run_source_with_path(src, None)
+    run_source_with_path(src, None, vec![])
 }
 
-pub fn run_source_with_path(src: &str, current_file: Option<PathBuf>) -> Result<(), String> {
+pub fn run_source_with_path(
+    src: &str,
+    current_file: Option<PathBuf>,
+    argv: Vec<String>,
+) -> Result<(), String> {
     let mut lexer = lexer::Lexer::new(src);
     let tokens = lexer.tokenize()?;
     let mut parser = parser::Parser::new(tokens);
@@ -25,18 +31,25 @@ pub fn run_source_with_path(src: &str, current_file: Option<PathBuf>) -> Result<
     {
         let mut g = interp.globals.borrow_mut();
         builtins::register(&mut g.vars);
+        let tuple: Vec<value::Value> = argv.iter().map(|s| value::Value::Str(s.clone())).collect();
+        g.define("argv", value::Value::Tuple(Rc::new(RefCell::new(tuple))), false);
     }
     interp.run(&program)?;
     Ok(())
 }
 
 pub fn run_source_capture(src: &str) -> Result<String, String> {
-    run_source_capture_with_path(src, None)
+    run_source_capture_with_path(src, None, vec![])
+}
+
+pub fn run_source_capture_with_argv(src: &str, argv: Vec<String>) -> Result<String, String> {
+    run_source_capture_with_path(src, None, argv)
 }
 
 pub fn run_source_capture_with_path(
     src: &str,
     current_file: Option<PathBuf>,
+    argv: Vec<String>,
 ) -> Result<String, String> {
     let mut lexer = lexer::Lexer::new(src);
     let tokens = lexer.tokenize()?;
@@ -47,6 +60,8 @@ pub fn run_source_capture_with_path(
     {
         let mut g = interp.globals.borrow_mut();
         builtins::register(&mut g.vars);
+        let tuple: Vec<value::Value> = argv.iter().map(|s| value::Value::Str(s.clone())).collect();
+        g.define("argv", value::Value::Tuple(Rc::new(RefCell::new(tuple))), false);
     }
     interp.run(&program)?;
     Ok(interp.take_output())

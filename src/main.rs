@@ -6,37 +6,39 @@ fn main() {
 
     let mut check_only = false;
     let mut file: Option<String> = None;
+    let mut program_args: Vec<String> = Vec::new();
 
     let mut i = 1;
     while i < args.len() {
         let a = &args[i];
         match a.as_str() {
-            "-h" | "--help" => {
+            "-h" | "--help" if file.is_none() => {
                 print!("{}", simpl::messages::cli_help());
                 return;
             }
-            "-v" | "--version" => {
+            "-v" | "--version" if file.is_none() => {
                 println!("{}", simpl::messages::cli_version(env!("CARGO_PKG_VERSION")));
                 return;
             }
-            "-r" | "--repl" => {
+            "-r" | "--repl" if file.is_none() => {
                 if let Err(e) = simpl::repl::run() {
                     eprintln!("{}", e);
                     std::process::exit(1);
                 }
                 return;
             }
-            "-c" | "--check" => {
+            "-c" | "--check" if file.is_none()=> {
                 check_only = true;
             }
-            other if other.starts_with('-') => {
+            other if other.starts_with('-') && file.is_none() => {
                 eprintln!("{}", simpl::messages::cli_unknown_flag(other));
                 std::process::exit(1);
             }
             other => {
                 if file.is_some() {
-                    eprintln!("{}", simpl::messages::cli_too_many_files());
-                    std::process::exit(1);
+                    // всё после файла — аргументы программы
+                    program_args.extend(args[i..].iter().cloned());
+                    break;
                 }
                 file = Some(other.to_string());
             }
@@ -73,9 +75,8 @@ fn main() {
         return;
     }
 
-    let path_buf = std::path::PathBuf::from(&path);
-
-    if let Err(e) = simpl::run_source_with_path(&src, Some(path_buf)) {
+    let path_buf = std::path::PathBuf::from(path.as_str());
+    if let Err(e) = simpl::run_source_with_path(&src, Some(path_buf), program_args) {
         eprintln!("{}", e);
         std::process::exit(1);
     }

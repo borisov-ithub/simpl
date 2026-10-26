@@ -74,6 +74,13 @@ fn new_interp() -> Interpreter {
     {
         let mut g = interp.globals.borrow_mut();
         builtins::register(&mut g.vars);
+        use std::cell::RefCell;
+        use std::rc::Rc;
+        g.define(
+            "argv",
+            crate::value::Value::Tuple(Rc::new(RefCell::new(vec![]))),
+            false,
+        );
     }
     interp
 }

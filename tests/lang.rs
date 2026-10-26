@@ -310,7 +310,7 @@ fn import_basic() {
     let main_path = dir.join("main.spl");
     std::fs::write(&main_path, main_src).unwrap();
 
-    let out = simpl::run_source_capture_with_path(main_src, Some(main_path)).unwrap();
+    let out = simpl::run_source_capture_with_path(main_src, Some(main_path), vec![]).unwrap();
     assert_eq!(out, "3 3.14\n");
 
     let _ = std::fs::remove_dir_all(&dir);
@@ -325,7 +325,7 @@ fn import_wildcard() {
     let main_path = dir.join("main.spl");
     std::fs::write(&main_path, main_src).unwrap();
 
-    let out = simpl::run_source_capture_with_path(main_src, Some(main_path)).unwrap();
+    let out = simpl::run_source_capture_with_path(main_src, Some(main_path), vec![]).unwrap();
     assert_eq!(out, "10\n");
 
     let _ = std::fs::remove_dir_all(&dir);
@@ -340,7 +340,7 @@ fn import_alias() {
     let main_path = dir.join("main.spl");
     std::fs::write(&main_path, main_src).unwrap();
 
-    let out = simpl::run_source_capture_with_path(main_src, Some(main_path)).unwrap();
+    let out = simpl::run_source_capture_with_path(main_src, Some(main_path), vec![]).unwrap();
     assert_eq!(out, "6\n");
 
     let _ = std::fs::remove_dir_all(&dir);
@@ -362,7 +362,7 @@ fn import_cycle_error() {
     let main_path = dir.join("main.spl");
     std::fs::write(&main_path, main_src).unwrap();
 
-    let e = simpl::run_source_capture_with_path(main_src, Some(main_path)).expect_err("должна быть ошибка");
+    let e = simpl::run_source_capture_with_path(main_src, Some(main_path), vec![]).expect_err("должна быть ошибка");
     assert!(e.contains("Циклический импорт"), "сообщение: {}", e);
 
     let _ = std::fs::remove_dir_all(&dir);
@@ -479,4 +479,41 @@ fn use_conflict_error() {
     let src = "let trim = 1\nuse string (trim)";
     let e = run_err(src);
     assert!(e.contains("уже объявлена"), "сообщение: {}", e);
+}
+
+// ============================================================
+// argv
+// ============================================================
+
+#[test]
+fn argv_empty() {
+    let out = simpl::run_source_capture("echo. argv").unwrap();
+    assert_eq!(out, "()\n");
+}
+
+#[test]
+fn argv_with_args() {
+    let out = simpl::run_source_capture_with_argv(
+        "echo. argv",
+        vec!["hello".into(), "world".into()],
+    ).unwrap();
+    assert_eq!(out, "(hello, world)\n");
+}
+
+#[test]
+fn argv_len_and_index() {
+    let out = simpl::run_source_capture_with_argv(
+        "echo. len(argv), argv[0], argv[1]",
+        vec!["a".into(), "b".into()],
+    ).unwrap();
+    assert_eq!(out, "2 a b\n");
+}
+
+#[test]
+fn argv_can_be_shadowed_in_function() {
+    let out = simpl::run_source_capture_with_argv(
+        "let f (*argv) = len(argv) end\necho. f(1, 2, 3), len(argv)",
+        vec!["a".into()],
+    ).unwrap();
+    assert_eq!(out, "3 1\n");
 }
