@@ -517,3 +517,44 @@ fn argv_can_be_shadowed_in_function() {
     ).unwrap();
     assert_eq!(out, "3 1\n");
 }
+
+#[test]
+fn sleep_zero_no_delay() {
+    let start = std::time::Instant::now();
+    let out = run("sleep(0)\necho. \"ok\"");
+    assert_eq!(out, "ok\n");
+    assert!(start.elapsed().as_millis() < 100, "sleep(0) не должен спать");
+}
+
+#[test]
+fn sleep_short() {
+    let start = std::time::Instant::now();
+    let out = run("sleep(0.1)\necho. \"ok\"");
+    assert_eq!(out, "ok\n");
+    let ms = start.elapsed().as_millis();
+    assert!(ms >= 90 && ms < 2000, "sleep(0.1) спал {}мс", ms);
+}
+
+#[test]
+fn sleep_negative_error() {
+    let e = run_err("sleep(-1)");
+    assert!(e.contains("неотрицательное"), "сообщение: {}", e);
+}
+
+#[test]
+fn sleep_too_long_error() {
+    let e = run_err("sleep(1000000000000000000000000000000000000000000000)");
+    assert!(e.contains("разумное"), "сообщение: {}", e);
+}
+
+#[test]
+fn sleep_bad_type_error() {
+    let e = run_err("sleep(\"1\")");
+    assert!(e.contains("число"), "сообщение: {}", e);
+}
+
+#[test]
+fn sleep_wrong_arity_error() {
+    let e = run_err("sleep()");
+    assert!(e.contains("ожидает 1"), "сообщение: {}", e);
+}

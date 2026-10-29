@@ -603,6 +603,7 @@ impl Interpreter {
             "oct" => return self.call_oct(args),
             "ord" => return self.call_ord(args),
             "chr" => return self.call_chr(args),
+            "sleep" => return self.call_sleep(args),
             _ => {}
         }
         if let Some(rest) = name.strip_prefix("string.") {
@@ -764,6 +765,37 @@ impl Interpreter {
             }
         }
         Ok(Value::Str(line))
+    }
+
+    fn call_sleep(&mut self, args: Vec<Value>) -> IResult<Value> {
+        if args.len() != 1 {
+            return Err(msg::bi_arity("sleep", 1, args.len()));
+        }
+        let secs = match &args[0] {
+            Value::Number(n) if n.is_finite() && *n >= 0.0 => *n,
+            Value::Number(n) => {
+                return Err(msg::bi_bad_type(
+                    "sleep",
+                    "неотрицательное конечное число",
+                    &format!("{}", n),
+                ))
+            }
+            other => {
+                return Err(msg::bi_bad_type("sleep", "число", other.type_name()))
+            }
+        };
+        const MAX_SLEEP_SECS: f64 = 1e9;
+        if secs > MAX_SLEEP_SECS {
+            return Err(msg::bi_bad_type(
+                "sleep",
+                "разумное число секунд (<= 1e9)",
+                &format!("{}", secs),
+            ));
+        }
+        if secs > 0.0 {
+            std::thread::sleep(std::time::Duration::from_secs_f64(secs));
+        }
+        Ok(Value::Nil)
     }
 
     fn resolve_import_path(&self, path: &str) -> IResult<PathBuf> {

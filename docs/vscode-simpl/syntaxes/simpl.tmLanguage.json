@@ -195,7 +195,7 @@
       "patterns": [
         {
           "name": "support.function.builtin.simpl",
-          "match": "\\b(len|str|num|range|input|bin|hex|oct|ord|chr)\\b"
+          "match": "\\b(len|str|num|range|input|bin|hex|oct|ord|chr|sleep)\\b(?=\\s*\\()"
         },
         {
           "match": "\\b(len|str|num|range|input|bin|hex|oct|ord|chr)\\b",
