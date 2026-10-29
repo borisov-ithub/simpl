@@ -50,6 +50,7 @@ pub struct Function {
     pub params: Vec<Param>,
     pub body: Block,
     pub env: crate::env::EnvRef,
+    pub bound: Vec<Value>,
 }
 
 impl fmt::Debug for Value {

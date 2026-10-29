@@ -63,10 +63,16 @@ fn function_too_many_args_error() {
     assert!(e.contains("Слишком много"), "сообщение: {}", e);
 }
 
+// #[test]
+// fn function_too_few_args_error() {
+//     let e = run_err("let f (a, b) = a + b end\nf(1)");
+//     assert!(e.contains("Недостаточно"), "сообщение: {}", e);
+// }
 #[test]
-fn function_too_few_args_error() {
-    let e = run_err("let f (a, b) = a + b end\nf(1)");
-    assert!(e.contains("Недостаточно"), "сообщение: {}", e);
+fn function_too_few_args_curries() {
+    // С каррированием недостаток аргументов возвращает функцию, а не ошибку
+    assert_eq!(run("let f (a, b) = a + b end\necho. type f(1)"), "function\n");
+    assert_eq!(run("let f (a, b) = a + b end\necho. f(1)(2)"), "3\n");
 }
 
 #[test]
@@ -557,4 +563,60 @@ fn sleep_bad_type_error() {
 fn sleep_wrong_arity_error() {
     let e = run_err("sleep()");
     assert!(e.contains("ожидает 1"), "сообщение: {}", e);
+}
+
+#[test]
+fn curry_partial_apply() {
+    assert_eq!(run("let add (a, b) = a + b end\necho. add(1)(2)"), "3\n");
+}
+
+#[test]
+fn curry_full_call() {
+    assert_eq!(run("let add (a, b) = a + b end\necho. add(1, 2)"), "3\n");
+}
+
+#[test]
+fn curry_partial_is_function() {
+    assert_eq!(run("let add (a, b) = a + b end\necho. type add(1)"), "function\n");
+}
+
+#[test]
+fn curry_three_args() {
+    assert_eq!(run("let f (a, b, c) = a + b + c end\necho. f(1)(2)(3), f(1, 2, 3), f(1, 2)(3), f(1)(2, 3)"), "6 6 6 6\n");
+}
+
+#[test]
+fn curry_default_not_curried() {
+    assert_eq!(run("let g (a, b = 10) = a + b end\necho. g(1)"), "11\n");
+}
+
+#[test]
+fn curry_default_curried_when_required_missing() {
+    assert_eq!(run("let g (a, b = 10) = a + b end\necho. g()(5)"), "15\n");
+}
+
+#[test]
+fn curry_star_args() {
+    assert_eq!(run("let h (a, *rest) = (a, rest) end\necho. h(1), h(1, 2, 3)"), "(1, ()) (1, (2, 3))\n");
+}
+
+#[test]
+fn curry_star_args_curried() {
+    assert_eq!(run("let h (a, *rest) = (a, rest) end\necho. h()(5)"), "(5, ())\n");
+}
+
+#[test]
+fn curry_too_many_args_error() {
+    let e = run_err("let add (a, b) = a + b end\nadd(1, 2, 3)");
+    assert!(e.contains("Слишком много"), "сообщение: {}", e);
+}
+
+#[test]
+fn curry_chain() {
+    assert_eq!(run("let add (a, b) = a + b end\nlet add5 = add(5)\necho. add5(3), add5(10)"), "8 15\n");
+}
+
+#[test]
+fn curry_lambda() {
+    assert_eq!(run("let f = \\(a, b) = a * b end\necho. f(3)(4)"), "12\n");
 }

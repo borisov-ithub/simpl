@@ -313,6 +313,7 @@ impl Interpreter {
                     params: params.clone(),
                     body: body.clone(),
                     env: env.clone(),
+                    bound: Vec::new(),
                 };
                 Ok(Flow::Normal(Value::Function(Rc::new(f))))
             }
@@ -322,6 +323,7 @@ impl Interpreter {
                     params: params.clone(),
                     body: body.clone(),
                     env: env.clone(),
+                    bound: Vec::new(),
                 };
                 Ok(Flow::Normal(Value::Function(Rc::new(f))))
             }
@@ -543,51 +545,75 @@ impl Interpreter {
 
     pub(crate) fn call(&mut self, f: Value, args: Vec<Value>) -> IResult<Value> {
         match f {
-            Value::Function(func) => {
-                let call_env = Env::child(&func.env);
-                let mut idx = 0;
-                let required = func
-                    .params
-                    .iter()
-                    .filter(|p| !p.star && p.default.is_none())
-                    .count();
-
-                for p in &func.params {
-                    if p.star {
-                        let rest: Vec<Value> = args[idx..].to_vec();
-                        call_env.borrow_mut().define_new(
-                            &p.name,
-                            Value::Tuple(Rc::new(RefCell::new(rest))),
-                            false,
-                        )?;
-                        idx = args.len();
-                    } else {
-                        let v = if idx < args.len() {
-                            let v = args[idx].clone();
-                            idx += 1;
-                            v
-                        } else if let Some(default) = &p.default {
-                            self.eval_value(default, &call_env)?
-                        } else {
-                            return Err(msg::rt_too_few_args(required, args.len(), &p.name));
-                        };
-                        call_env.borrow_mut().define_new(&p.name, v, false)?;
-                    }
-                }
-
-                if idx < args.len() {
-                    return Err(msg::rt_too_many_args(idx, args.len()));
-                }
-
-                match self.eval_block(&func.body, &call_env)? {
-                    Flow::Normal(v) => Ok(v),
-                    Flow::Return(v) => Ok(v),
-                    Flow::Break => Err(msg::rt_break_outside_loop()),
-                    Flow::Continue => Err(msg::rt_continue_outside_loop()),
-                }
-            }
+            Value::Function(func) => self.call_function(func, args),
             Value::Builtin(name) => self.call_builtin(name, args),
             other => Err(msg::rt_call_non_function(other.type_name())),
+        }
+    }
+    
+    fn call_function(&mut self, func: Rc<Function>, args: Vec<Value>) -> IResult<Value> {
+        let mut all_args: Vec<Value> = func.bound.clone();
+        all_args.extend(args);
+    
+        // Считаем, сколько обязательных параметров (без *, без default)
+        let required = func
+            .params
+            .iter()
+            .filter(|p| !p.star && p.default.is_none())
+            .count();
+    
+        // Есть ли *args
+        // let has_star = func.params.iter().any(|p| p.star);
+    
+        // Каррирование: если не хватает обязательных аргументов
+        if all_args.len() < required {
+            // Возвращаем новую функцию с привязанными аргументами
+            let new_func = Function {
+                params: func.params.clone(),
+                body: func.body.clone(),
+                env: func.env.clone(),
+                bound: all_args,
+            };
+            return Ok(Value::Function(Rc::new(new_func)));
+        }
+    
+        // Полный вызов
+        let call_env = Env::child(&func.env);
+        let mut idx = 0;
+    
+        for p in &func.params {
+            if p.star {
+                let rest: Vec<Value> = all_args[idx..].to_vec();
+                call_env.borrow_mut().define(
+                    &p.name,
+                    Value::Tuple(Rc::new(RefCell::new(rest))),
+                    false,
+                );
+                idx = all_args.len();
+            } else {
+                let v = if idx < all_args.len() {
+                    let v = all_args[idx].clone();
+                    idx += 1;
+                    v
+                } else if let Some(default) = &p.default {
+                    self.eval_value(default, &call_env)?
+                } else {
+                    // Теоретически недостижимо: required уже проверен
+                    return Err(msg::rt_too_few_args(required, all_args.len(), &p.name));
+                };
+                call_env.borrow_mut().define(&p.name, v, false);
+            }
+        }
+    
+        if idx < all_args.len() {
+            return Err(msg::rt_too_many_args(idx, all_args.len()));
+        }
+    
+        match self.eval_block(&func.body, &call_env)? {
+            Flow::Normal(v) => Ok(v),
+            Flow::Return(v) => Ok(v),
+            Flow::Break => Err(msg::rt_break_outside_loop()),
+            Flow::Continue => Err(msg::rt_continue_outside_loop()),
         }
     }
 
