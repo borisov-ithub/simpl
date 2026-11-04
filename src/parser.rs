@@ -505,7 +505,7 @@ impl Parser {
     }
 
     fn parse_comparison(&mut self) -> PResult<Expr> {
-        let mut left = self.parse_concat()?;
+        let mut left = self.parse_bit_or()?;
         loop {
             let op = match self.peek() {
                 Token::EqEq => BinOp::Eq,
@@ -514,6 +514,48 @@ impl Parser {
                 Token::LtEq => BinOp::LtEq,
                 Token::Gt => BinOp::Gt,
                 Token::GtEq => BinOp::GtEq,
+                _ => break,
+            };
+            self.advance();
+            let right = self.parse_bit_or()?;
+            left = Expr::Binary { op, left: Box::new(left), right: Box::new(right) };
+        }
+        Ok(left)
+    }
+    
+    fn parse_bit_or(&mut self) -> PResult<Expr> {
+        let mut left = self.parse_bit_xor()?;
+        while self.match_tok(&Token::Pipe) {
+            let right = self.parse_bit_xor()?;
+            left = Expr::Binary { op: BinOp::BitOr, left: Box::new(left), right: Box::new(right) };
+        }
+        Ok(left)
+    }
+    
+    fn parse_bit_xor(&mut self) -> PResult<Expr> {
+        let mut left = self.parse_bit_and()?;
+        while self.match_tok(&Token::Xor) {
+            let right = self.parse_bit_and()?;
+            left = Expr::Binary { op: BinOp::BitXor, left: Box::new(left), right: Box::new(right) };
+        }
+        Ok(left)
+    }
+    
+    fn parse_bit_and(&mut self) -> PResult<Expr> {
+        let mut left = self.parse_shift()?;
+        while self.match_tok(&Token::Amp) {
+            let right = self.parse_shift()?;
+            left = Expr::Binary { op: BinOp::BitAnd, left: Box::new(left), right: Box::new(right) };
+        }
+        Ok(left)
+    }
+    
+    fn parse_shift(&mut self) -> PResult<Expr> {
+        let mut left = self.parse_concat()?;
+        loop {
+            let op = match self.peek() {
+                Token::Shl => BinOp::Shl,
+                Token::Shr => BinOp::Shr,
                 _ => break,
             };
             self.advance();
@@ -575,6 +617,10 @@ impl Parser {
         if self.match_tok(&Token::Minus) {
             let e = self.parse_unary()?;
             return Ok(Expr::Unary { op: UnaryOp::Neg, operand: Box::new(e) });
+        }
+        if self.match_tok(&Token::Tilde) {
+            let e = self.parse_unary()?;
+            return Ok(Expr::Unary { op: UnaryOp::BitNot, operand: Box::new(e) });
         }
         if self.match_tok(&Token::Type) {
             let e = self.parse_unary()?;

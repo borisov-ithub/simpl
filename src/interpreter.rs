@@ -238,6 +238,10 @@ impl Interpreter {
                         other => Err(msg::rt_unary_neg_type(other.type_name())),
                     },
                     UnaryOp::Not => Ok(Flow::Normal(Value::Bool(!v.truthy()))),
+                    UnaryOp::BitNot => {
+                        let n = as_i64(&v, "~")?;
+                        Ok(Flow::Normal(Value::Number((!n) as f64)))
+                    }
                 }
             }
 
@@ -568,6 +572,33 @@ impl Interpreter {
                     GtEq => a >= b,
                     _ => unreachable!(),
                 }))
+            }
+            BitAnd | BitOr | BitXor => {
+                let a = as_i64(&l, "побитовое И/ИЛИ/XOR")?;
+                let b = as_i64(&r, "побитовое И/ИЛИ/XOR")?;
+                let result = match op {
+                    BitAnd => a & b,
+                    BitOr => a | b,
+                    BitXor => a ^ b,
+                    _ => unreachable!(),
+                };
+                Ok(Value::Number(result as f64))
+            }
+            Shl | Shr => {
+                let a = as_i64(&l, "сдвиг")?;
+                let n = as_i64(&r, "сдвиг")?;
+                if n < 0 || n >= 64 {
+                    return Err(msg::rt_shift_too_big(
+                        if let BinOp::Shl = op { "<<" } else { ">>" },
+                        n,
+                    ));
+                }
+                let result = match op {
+                    Shl => a.wrapping_shl(n as u32),
+                    Shr => a.wrapping_shr(n as u32),
+                    _ => unreachable!(),
+                };
+                Ok(Value::Number(result as f64))
             }
             And | Or => unreachable!(),
         }
@@ -1011,6 +1042,23 @@ impl Interpreter {
             }
         }
         Ok(last)
+    }
+}
+
+fn as_i64(v: &Value, ctx: &str) -> IResult<i64> {
+    match v {
+        Value::Number(n) => {
+            if !n.is_finite() || n.fract() != 0.0 {
+                return Err(msg::rt_bitop_expected_int(ctx, &format!("{}", n)));
+            }
+            // f64 хранит целые точно до 2^53. 
+            // abs() >= 2^53 — потеря точности.
+            if n.abs() >= 9_007_199_254_740_992.0 {
+                return Err(msg::rt_bitop_overflow(ctx, *n));
+            }
+            Ok(*n as i64)
+        }
+        other => Err(msg::rt_bitop_expected_int(ctx, other.type_name())),
     }
 }
 

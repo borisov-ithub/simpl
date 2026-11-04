@@ -890,3 +890,28 @@ pub fn parse_comp_expected_in(line: usize, col: usize, found: &str) -> String {
         line, col, found
     )
 }
+
+// ============================================================
+// Побитовые операции
+// ============================================================
+
+pub fn rt_bitop_expected_int(op: &str, got: &str) -> String {
+    format!(
+        "{}: ожидалось целое число, получено {}",
+        op, got
+    )
+}
+
+pub fn rt_bitop_overflow(op: &str, n: f64) -> String {
+    format!(
+        "{}: число {} вне диапазона целых (|n| < 2^53)",
+        op, n
+    )
+}
+
+pub fn rt_shift_too_big(op: &str, n: i64) -> String {
+    format!(
+        "{}: сдвиг на {} недопустим (0 <= n < 64)",
+        op, n
+    )
+}

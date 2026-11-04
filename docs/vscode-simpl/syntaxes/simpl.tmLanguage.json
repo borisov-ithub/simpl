@@ -162,7 +162,7 @@
       "patterns": [
         {
           "name": "keyword.control.simpl",
-          "match": "\\b(if|then|elseif|else|end|for|in|do|loop|break|continue|match|return|and|or|not|use|as|import|type)\\b"
+          "match": "\\b(if|then|elseif|else|end|for|in|do|loop|break|continue|match|return|and|or|not|use|as|import|type|xor)\\b"
         }
       ]
     },
@@ -217,6 +217,14 @@
 
     "operators": {
       "patterns": [
+        {
+          "name": "keyword.operator.bitwise.simpl",
+          "match": "&|\\||~"
+        },
+        {
+          "name": "keyword.operator.shift.simpl",
+          "match": "<<|>>"
+        },
         {
           "name": "keyword.operator.simpl",
           "match": "\\+\\+|==|!=|<=|>=|->"

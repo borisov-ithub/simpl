@@ -759,3 +759,84 @@ fn literal_auto_keys_still_works() {
     let src = "let s = { 10, 20, 30 }\necho. s[0], s[2]";
     assert_eq!(run(src), "10 30\n");
 }
+
+#[test]
+fn bit_and() {
+    assert_eq!(run("echo. 6 & 3"), "2\n");
+}
+
+#[test]
+fn bit_or() {
+    assert_eq!(run("echo. 6 | 3"), "7\n");
+}
+
+#[test]
+fn bit_xor() {
+    assert_eq!(run("echo. 6 xor 3"), "5\n");
+}
+
+#[test]
+fn bit_not() {
+    assert_eq!(run("echo. ~5"), "-6\n");
+}
+
+#[test]
+fn shift_left() {
+    assert_eq!(run("echo. 1 << 4"), "16\n");
+}
+
+#[test]
+fn shift_right() {
+    assert_eq!(run("echo. 16 >> 2"), "4\n");
+}
+
+#[test]
+fn shift_right_negative() {
+    assert_eq!(run("echo. -8 >> 1"), "-4\n");
+}
+
+#[test]
+fn bitop_float_error() {
+    let e = run_err("echo. 3.5 & 1");
+    assert!(e.contains("целое число"), "сообщение: {}", e);
+}
+
+#[test]
+fn bitop_overflow_error() {
+    let e = run_err("echo. 9007199254740992 & 1");  // 2^53
+    assert!(e.contains("вне диапазона"), "сообщение: {}", e);
+}
+
+#[test]
+fn shift_too_big_error() {
+    let e = run_err("echo. 1 << 64");
+    assert!(e.contains("сдвиг на 64"), "сообщение: {}", e);
+}
+
+#[test]
+fn shift_negative_error() {
+    let e = run_err("echo. 1 << -1");
+    assert!(e.contains("сдвиг на -1"), "сообщение: {}", e);
+}
+
+#[test]
+fn bitop_precedence() {
+    // 6 & 3 | 2 = (6 & 3) | 2 = 2 | 2 = 2
+    assert_eq!(run("echo. 6 & 3 | 2"), "2\n");
+    // 1 << 2 + 1 = 1 << (2 + 1) = 8 (сдвиг ниже +)
+    assert_eq!(run("echo. 1 << 2 + 1"), "8\n");
+    // 6 xor 3 & 1 = 6 xor (3 & 1) = 6 xor 1 = 7
+    assert_eq!(run("echo. 6 xor 3 & 1"), "7\n");
+}
+
+#[test]
+fn logical_and_or_not_still_work() {
+    assert_eq!(run("echo. true and false, true or false, not false"), "false true true\n");
+}
+
+#[test]
+fn logical_vs_bitwise() {
+    // and — логическое (truthy), & — побитовое (только числа)
+    assert_eq!(run("echo. 1 and 2"), "true\n");
+    assert_eq!(run("echo. 1 & 2"), "0\n");
+}

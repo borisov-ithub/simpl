@@ -16,6 +16,14 @@ pub enum Token {
     Echo, EchoDot, Type,
     True, False, Nil,
     And, Or, Not,
+
+    Amp,      // &
+    Pipe,     // |
+    Tilde,    // ~
+    Shl,      // <<
+    Shr,      // >>
+    Xor,      // xor
+
     Return,
 
     Plus, Minus, Star, Slash, Percent,
@@ -159,6 +167,7 @@ impl Lexer {
                     if self.peek() == Some('.') { self.advance(); Token::EchoDot }
                     else { Token::Echo }
                 }
+                "xor" => Token::Xor,
                 _ => Token::Ident(s),
             }));
         }
@@ -200,10 +209,31 @@ impl Lexer {
             '=' => if self.peek() == Some('=') { self.advance(); Token::EqEq } else { Token::Eq },
             '!' => if self.peek() == Some('=') { self.advance(); Token::NotEq }
                    else { return Err(msg::lex_bang_without_eq(self.line, self.col)); },
-            '<' => if self.peek() == Some('=') { self.advance(); Token::LtEq }   
-                   else { Token::Lt },
-            '>' => if self.peek() == Some('=') { self.advance(); Token::GtEq } 
-                   else { Token::Gt },
+            '&' => Token::Amp,
+            '|' => Token::Pipe,
+            '~' => Token::Tilde,
+            '<' => {
+                if self.peek() == Some('=') {
+                    self.advance();
+                    Token::LtEq
+                } else if self.peek() == Some('<') {
+                    self.advance();
+                    Token::Shl
+                } else {
+                    Token::Lt
+                }
+            }
+            '>' => {
+                if self.peek() == Some('=') {
+                    self.advance();
+                    Token::GtEq
+                } else if self.peek() == Some('>') {
+                    self.advance();
+                    Token::Shr
+                } else {
+                    Token::Gt
+                }
+            }
             '^' => Token::Caret,
             '\\' => Token::Backslash,
             '(' => Token::LParen,
@@ -217,6 +247,7 @@ impl Lexer {
                    else { Token::Dot },
             ':' => Token::Colon,
             '$' => Token::Dollar,
+
             other => return Err(msg::lex_unknown_char(self.line, self.col, other)),
         }))
     }

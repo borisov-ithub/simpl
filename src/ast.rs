@@ -95,7 +95,7 @@ pub enum Pattern {
 pub type Block = Vec<Expr>;
 
 #[derive(Debug, Clone, Copy)]
-pub enum UnaryOp { Neg, Not }
+pub enum UnaryOp { Neg, Not, BitNot }
 
 #[derive(Debug, Clone, Copy)]
 pub enum BinOp {
@@ -103,6 +103,8 @@ pub enum BinOp {
     Concat,
     Eq, NotEq, Lt, LtEq, Gt, GtEq,
     And, Or,
+    BitAnd, BitOr, BitXor,
+    Shl, Shr,
 }
 
 #[derive(Debug, Clone)]
