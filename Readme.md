@@ -16,6 +16,7 @@ cargo build --release
 simpl program.spl
 ```
 ## Пример
+```
 -- factorial.spl
 let fact (n) =
     if n <= 1 then 1

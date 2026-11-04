@@ -842,3 +842,25 @@ pub fn repl_load_error(path: &str, err: &std::io::Error) -> String {
 pub fn repl_reset_ok() -> String {
     "Окружение сброшено.".to_string()
 }
+// ============================================================
+
+pub fn rt_compose_non_function(got: &str) -> String {
+    format!("Композиция (..) ожидает функции, получено {}", got)
+}
+
+pub fn rt_flip_non_function(got: &str) -> String {
+    format!("flip(): ожидалась функция, получено {}", got)
+}
+
+pub fn rt_flip_needs_binary(required: usize) -> String {
+    format!(
+        "flip(): ожидалась функция ровно с двумя обязательными параметрами, найдено {}.\n\
+         Подсказка: flip работает только с бинарными функциями.",
+        required
+    )
+}
+
+pub fn rt_flip_builtin() -> String {
+    "flip(): встроенные функции не поддерживаются.\n\
+     Подсказка: оберните встроенную функцию в лямбду: flip(\\(a, b) = ... end)".to_string()
+}

@@ -222,6 +222,14 @@
           "match": "\\+\\+|==|!=|<=|>=|->"
         },
         {
+          "name": "keyword.operator.pipe.simpl",
+          "match": "\\$"
+        },
+        {
+          "name": "keyword.operator.compose.simpl",
+          "match": "\\.\\."
+        },
+        {
           "name": "keyword.operator.arithmetic.simpl",
           "match": "\\+|-|\\*|/|%"
         },
@@ -246,6 +254,8 @@
 
     "punctuation": {
       "patterns": [
+        { "name": "keyword.operator.compose.simpl", "match": "\\.\\." },
+        { "name": "punctuation.accessor.dot.simpl", "match": "\\." },
         {
           "name": "punctuation.separator.comma.simpl",
           "match": ","

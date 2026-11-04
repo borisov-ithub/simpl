@@ -216,25 +216,29 @@ impl Parser {
     
         let mut parts: Vec<String> = Vec::new();
     
-        // Первый сегмент: Ident, "." или ".."
-        if self.check(&Token::Dot) {
-            self.advance();
-            if self.check(&Token::Dot) {
+        // Первый сегмент: Ident, DotDot (..), Dot (.)
+        match self.peek() {
+            Token::DotDot => {
                 self.advance();
                 parts.push("..".to_string());
-            } else {
+            }
+            Token::Dot => {
+                self.advance();
                 parts.push(".".to_string());
             }
-        } else {
-            match self.advance() {
-                Token::Ident(s) => parts.push(s),
-                other => {
-                    let (l, c) = self.loc();
-                    return Err(msg::parse_import_expected_path(l, c, &format!("{:?}", other)));
-                }
+            Token::Ident(_) => {
+                let s = match self.advance() {
+                    Token::Ident(s) => s,
+                    _ => unreachable!(),
+                };
+                parts.push(s);
+            }
+            other => {
+                let (l, c) = self.loc();
+                return Err(msg::parse_import_expected_path(l, c, &format!("{:?}", other)));
             }
         }
-    
+        
         // Остальные сегменты через "/"
         while self.match_tok(&Token::Slash) {
             match self.advance() {
@@ -446,13 +450,22 @@ impl Parser {
         Ok(expr)
     }
 
+    fn parse_pipe(&mut self) -> PResult<Expr> {
+        let mut left = self.parse_or()?;
+        while self.match_tok(&Token::Dollar) {
+            let right = self.parse_or()?;
+            left = Expr::Pipe { left: Box::new(left), right: Box::new(right) };
+        }
+        Ok(left)
+    }
+
     fn parse_ternary(&mut self) -> PResult<Expr> {
-        let expr = self.parse_or()?;
+        let expr = self.parse_pipe()?;
         if self.check(&Token::If) {
             self.advance();
-            let cond = self.parse_or()?;
+            let cond = self.parse_pipe()?;
             self.expect(&Token::Else, &msg::parse_ternary_expected_else())?;
-            let else_expr = self.parse_or()?;
+            let else_expr = self.parse_pipe()?;
             if self.check(&Token::If) {
                 let (l, c) = self.loc();
                 return Err(msg::parse_ternary_chain_forbidden(l, c));
@@ -511,10 +524,18 @@ impl Parser {
     }
 
     fn parse_concat(&mut self) -> PResult<Expr> {
+        // обрабатывает и ++, и ..
         let mut left = self.parse_add()?;
-        while self.match_tok(&Token::PlusPlus) {
-            let right = self.parse_add()?;
-            left = Expr::Binary { op: BinOp::Concat, left: Box::new(left), right: Box::new(right) };
+        loop {
+            if self.match_tok(&Token::PlusPlus) {
+                let right = self.parse_add()?;
+                left = Expr::Binary { op: BinOp::Concat, left: Box::new(left), right: Box::new(right) };
+            } else if self.match_tok(&Token::DotDot) {
+                let right = self.parse_add()?;
+                left = Expr::Compose { left: Box::new(left), right: Box::new(right) };
+            } else {
+                break;
+            }
         }
         Ok(left)
     }

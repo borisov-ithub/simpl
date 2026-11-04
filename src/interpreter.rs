@@ -67,6 +67,29 @@ impl Interpreter {
             Expr::Bool(b) => Ok(Flow::Normal(Value::Bool(*b))),
             Expr::Nil => Ok(Flow::Normal(Value::Nil)),
             
+            Expr::Pipe { left, right } => {
+                let v = self.eval_value(left, env)?;
+                let f = self.eval_value(right, env)?;
+                let result = self.call(f, vec![v])?;
+                Ok(Flow::Normal(result))
+            }
+            
+            Expr::Compose { left, right } => {
+                let f = self.eval_value(left, env)?;
+                let g = self.eval_value(right, env)?;
+                // проверяем, что оба — функции
+                if !matches!(f, Value::Function(_) | Value::Builtin(_) | Value::Flipped { .. } | Value::Composed { .. }) {
+                    return Err(msg::rt_compose_non_function(f.type_name()));
+                }
+                if !matches!(g, Value::Function(_) | Value::Builtin(_) | Value::Flipped { .. } | Value::Composed { .. }) {
+                    return Err(msg::rt_compose_non_function(g.type_name()));
+                }
+                Ok(Flow::Normal(Value::Composed {
+                    left: Rc::new(f),
+                    right: Rc::new(g),
+                }))
+            }
+
             Expr::TypeOf(operand) => {
                 let v = self.eval_value(operand, env)?;
                 Ok(Flow::Normal(Value::Str(v.type_name().to_string())))
@@ -547,6 +570,32 @@ impl Interpreter {
         match f {
             Value::Function(func) => self.call_function(func, args),
             Value::Builtin(name) => self.call_builtin(name, args),
+            Value::Flipped { inner, bound } => {
+                let mut all = bound.clone();
+                all.extend(args);
+        
+                let required = match &*inner {
+                    Value::Function(func) => func
+                        .params
+                        .iter()
+                        .filter(|p| !p.star && p.default.is_none())
+                        .count(),
+                    _ => return Err(msg::rt_flip_non_function(inner.type_name())),
+                };
+                if required != 2 {
+                    return Err(msg::rt_flip_needs_binary(required));
+                }
+        
+                if all.len() < 2 {
+                    return Ok(Value::Flipped { inner: inner.clone(), bound: all });
+                }
+                all.swap(0, 1);
+                self.call((*inner).clone(), all)
+            }
+            Value::Composed { left, right } => {
+                let inner = self.call((*left).clone(), args)?;
+                self.call((*right).clone(), vec![inner])
+            }
             other => Err(msg::rt_call_non_function(other.type_name())),
         }
     }
@@ -630,6 +679,7 @@ impl Interpreter {
             "ord" => return self.call_ord(args),
             "chr" => return self.call_chr(args),
             "sleep" => return self.call_sleep(args),
+            "flip" => return self.call_flip(args),
             _ => {}
         }
         if let Some(rest) = name.strip_prefix("string.") {
@@ -822,6 +872,27 @@ impl Interpreter {
             std::thread::sleep(std::time::Duration::from_secs_f64(secs));
         }
         Ok(Value::Nil)
+    }
+
+    fn call_flip(&mut self, args: Vec<Value>) -> IResult<Value> {
+        if args.len() != 1 {
+            return Err(msg::bi_arity("flip", 1, args.len()));
+        }
+        match &args[0] {
+            Value::Function(f) => {
+                let required = f.params.iter().filter(|p| !p.star && p.default.is_none()).count();
+                if required != 2 {
+                    return Err(msg::rt_flip_needs_binary(required));
+                }
+                Ok(Value::Flipped {
+                    inner: Rc::new(args[0].clone()),
+                    bound: Vec::new(),
+                })
+            }
+            Value::Builtin(_) => Err(msg::rt_flip_builtin()),
+            Value::Flipped { .. } => Err(msg::rt_flip_non_function("flipped function")),
+            other => Err(msg::rt_flip_non_function(other.type_name())),
+        }
     }
 
     fn resolve_import_path(&self, path: &str) -> IResult<PathBuf> {

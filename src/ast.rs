@@ -20,6 +20,9 @@ pub enum Expr {
     Binary { op: BinOp, left: Box<Expr>, right: Box<Expr> },
     TypeOf(Box<Expr>),
     
+    Pipe { left: Box<Expr>, right: Box<Expr> },
+    Compose { left: Box<Expr>, right: Box<Expr> },
+
     Index { target: Box<Expr>, index: Box<Expr> },
     Field { target: Box<Expr>, name: String },
 

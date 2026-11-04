@@ -26,6 +26,9 @@ pub enum Token {
     LBracket, RBracket,
     Comma, Dot, Colon,
 
+    Dollar,   // $
+    DotDot,   // ..
+
     Newline,
     Eof,
 }
@@ -197,8 +200,10 @@ impl Lexer {
             '=' => if self.peek() == Some('=') { self.advance(); Token::EqEq } else { Token::Eq },
             '!' => if self.peek() == Some('=') { self.advance(); Token::NotEq }
                    else { return Err(msg::lex_bang_without_eq(self.line, self.col)); },
-            '<' => if self.peek() == Some('=') { self.advance(); Token::LtEq } else { Token::Lt },
-            '>' => if self.peek() == Some('=') { self.advance(); Token::GtEq } else { Token::Gt },
+            '<' => if self.peek() == Some('=') { self.advance(); Token::LtEq }   
+                   else { Token::Lt },
+            '>' => if self.peek() == Some('=') { self.advance(); Token::GtEq } 
+                   else { Token::Gt },
             '^' => Token::Caret,
             '\\' => Token::Backslash,
             '(' => Token::LParen,
@@ -208,8 +213,10 @@ impl Lexer {
             '[' => Token::LBracket,
             ']' => Token::RBracket,
             ',' => Token::Comma,
-            '.' => Token::Dot,
+            '.' => if self.peek() == Some('.') { self.advance(); Token::DotDot } 
+                   else { Token::Dot },
             ':' => Token::Colon,
+            '$' => Token::Dollar,
             other => return Err(msg::lex_unknown_char(self.line, self.col, other)),
         }))
     }

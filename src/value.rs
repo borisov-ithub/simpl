@@ -44,6 +44,8 @@ pub enum Value {
     Struct(Rc<RefCell<StructMap>>),
     Function(Rc<Function>),
     Builtin(&'static str),
+    Flipped { inner: Rc<Value>, bound: Vec<Value> },
+    Composed { left: Rc<Value>, right: Rc<Value> },
 }
 
 pub struct Function {
@@ -61,9 +63,11 @@ impl fmt::Debug for Value {
             Value::Str(s) => write!(f, "\"{}\"", s),
             Value::Bool(b) => write!(f, "{}", b),
             Value::Tuple(_) => write!(f, "<кортеж>"),
-            Value::Struct(_) => write!(f, "<struct>"),
+            Value::Struct(_) => write!(f, "<структура>"),
             Value::Function(_) => write!(f, "<функция>"),
             Value::Builtin(n) => write!(f, "<встроенная {}>", n),
+            Value::Flipped { .. } => write!(f, "<функция>"),
+            Value::Composed { .. } => write!(f, "<функция>"),
         }
     }
 }
@@ -77,7 +81,7 @@ impl Value {
             Value::Bool(_) => "bool",
             Value::Tuple(_) => "tuple",
             Value::Struct(_) => "struct",
-            Value::Function(_) | Value::Builtin(_) => "function",
+            Value::Function(_) | Value::Builtin(_) | Value::Flipped { .. } | Value::Composed { .. } => "function",
         }
     }
 
@@ -116,6 +120,8 @@ impl Value {
             }
             Value::Function(_) => "<функция>".into(),
             Value::Builtin(n) => format!("<встроенная {}>", n),
+            Value::Flipped { .. } => "<функция>".into(),
+            Value::Composed { .. } => "<функция>".into(),
         }
     }
 }

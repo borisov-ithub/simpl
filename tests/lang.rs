@@ -620,3 +620,75 @@ fn curry_chain() {
 fn curry_lambda() {
     assert_eq!(run("let f = \\(a, b) = a * b end\necho. f(3)(4)"), "12\n");
 }
+
+#[test]
+fn pipe_basic() {
+    assert_eq!(run("let inc (n) = n + 1 end\necho. 1 $ inc"), "2\n");
+}
+
+#[test]
+fn pipe_chain() {
+    let src = "let inc (n) = n + 1 end\nlet dbl (n) = n * 2 end\nlet add (a, b) = a + b end\nlet x = 1\necho. x $ inc $ dbl $ add(10) $ inc";
+    assert_eq!(run(src), "15\n");
+}
+
+#[test]
+fn compose_basic() {
+    assert_eq!(run("let inc (n) = n + 1 end\nlet dbl (n) = n * 2 end\nlet f = inc .. dbl\necho. f(3)"), "8\n");
+}
+
+#[test]
+fn compose_chain() {
+    let src = "let inc (n) = n + 1 end\nlet dbl (n) = n * 2 end\nlet add (a, b) = a + b end\nlet f = inc .. dbl .. add(10) .. inc\necho. f(1)";
+    assert_eq!(run(src), "15\n");
+}
+
+#[test]
+fn compose_non_function_error() {
+    let e = run_err("let f = 1 .. 2");
+    assert!(e.contains("Композиция"), "сообщение: {}", e);
+}
+
+#[test]
+fn pipe_non_function_error() {
+    let e = run_err("echo. 1 $ 2");
+    assert!(e.contains("Нельзя вызвать"), "сообщение: {}", e);
+}
+
+#[test]
+fn flip_basic() {
+    assert_eq!(run("let sub (a, b) = a - b end\nlet rsub = flip(sub)\necho. rsub(3, 10)"), "7\n");
+}
+
+#[test]
+fn flip_curried() {
+    assert_eq!(run("let sub (a, b) = a - b end\necho. flip(sub)(1)(2)"), "1\n");
+}
+
+#[test]
+fn flip_curried_full() {
+    assert_eq!(run("let sub (a, b) = a - b end\necho. flip(sub)(1, 2)"), "1\n");
+}
+
+#[test]
+fn flip_non_function_error() {
+    let e = run_err("flip(42)");
+    assert!(e.contains("ожидалась функция"), "сообщение: {}", e);
+}
+
+#[test]
+fn flip_unary_error() {
+    let e = run_err("let inc (x) = x + 1 end\nflip(inc)");
+    assert!(e.contains("двумя обязательными"), "сообщение: {}", e);
+}
+
+#[test]
+fn flip_builtin_error() {
+    let e = run_err("flip(len)");
+    assert!(e.contains("встроенные"), "сообщение: {}", e);
+}
+
+#[test]
+fn pipe_with_flip() {
+    assert_eq!(run("let sub (a, b) = a - b end\necho. 10 $ flip(sub)(3)"), "7\n");
+}
