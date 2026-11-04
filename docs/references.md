@@ -797,51 +797,100 @@ Struct даты-времени: `{ year, month, day, hour, min, sec, wday }`. `w
 Подсказка: используйте let ^x при объявлении, если значение нужно менять.
 ```
 
-## 25. Что не входит в язык
-
-Для ясности — конструкции, которых в Simpl **нет**:
-
-- `while`.
-- `class`, наследование, ООП.
-- Метатаблицы, `__index`, `__newindex`.
-- Глобальные переменные (все переменные локальны).
-- Пользовательские модули с явным `export` — импортируется всё, что объявлено через `let` на верхнем уровне.
-- Пакетные менеджеры, версионирование импортов.
-- Пользовательские исключения (`throw`/`catch`).
-- Именованные аргументы при вызове.
-- Присваивание элементам кортежа (`t[0] = 5` — ошибка).
-- Вложенная интерполяция `$(... $(...) ...)`.
-- REPL.
-- Мутация `struct` через `^s.x = ...` — **не нужна**: `s.x = ...` работает всегда.
-- Разделитель `--` для явного отделения аргументов программы (всё после файла и так считается аргументами программы).
-
-## 26. Грамматика (EBNF, упрощённо)
+## 25. Грамматика (EBNF, упрощённо)
 
 ```ebnf
+(*
+  Упрощённая грамматика Simpl.
+  Не отражает семантические ограничения — они перечислены в комментариях ниже.
+*)
+
 program     = { statement } ;
-statement   = import | use | let | return | break | continue | echo | assign | expr ;
-import      = "import" import_path [ "as" Ident ] [ "(" ( "*" | Ident { "," Ident } ) ")" ] ;
-import_path = String | ( Ident | "." | ".." ) { "/" Ident } ;
+statement   = use | import | let | let_tuple | return | break | continue | echo | assign | expr ;
+
+(* use и import допустимы только на верхнем уровне файла, не внутри block.
+   Внутри block парсер выдаёт ошибку «только на верхнем уровне». *)
 use         = "use" Ident [ "as" Ident ] "(" ( "*" | Ident { "," Ident } ) ")" ;
-let         = "let" [ "^" ] name ( [ "(" params ")" ] "=" expr [ "end" ] | "(" names ")" "=" expr ) ;
-names       = [ "^" ] Ident { "," [ "^" ] Ident } ;
+import      = "import" import_path [ "as" Ident ] [ "(" ( "*" | Ident { "," Ident } ) ")" ] ;
+(* import_path: строка в кавычках (для путей с пробелами, абсолютных, Windows)
+   или сегменты через "/". ".." — подъём на уровень выше, "." — текущая директория.
+   Разделитель — всегда "/", независимо от ОС. *)
+import_path = String | ( Ident | "." | ".." ) { "/" Ident } ;
+
+(* let: либо функция ("(" params ")" "=" block "end"), либо переменная ("=" expr).
+   Функция не может быть мутабельной (^), это ошибка парсера. *)
+let         = "let" [ "^" ] Ident
+              ( "(" params ")" "=" block "end"          -- функция
+              | "=" expr ) ;                             -- переменная
+(* let_tuple: деструктуризация кортежа. Каждое имя может быть ^ или без. *)
+let_tuple   = "let" "(" [ "^" ] Ident { "," [ "^" ] Ident } ")" "=" expr ;
+(* params: параметры функции. "*rest" — сбор остальных, должен быть последним.
+   Параметры с default идут после параметров без default.
+   Дубликат имени параметра — ошибка парсера. *)
 params      = [ param { "," param } ] ;
 param       = [ "*" ] Ident [ "=" expr ] ;
+
 return      = "return" [ expr ] ;
+(* echo без аргументов — ошибка парсера. *)
 echo        = ( "echo" | "echo." ) expr { "," expr } ;
-assign      = "^" Ident "=" expr | postfix ( "." Ident | "[" expr "]" ) "=" expr ;
+
+(* assign: присваивание переменной (только с ^) или полю/индексу (без ^).
+   Цепочки: s.a.b = expr, s["a"]["b"] = expr. *)
+assign      = "^" Ident "=" expr
+            | postfix ( "." Ident | "[" expr "]" ) "=" expr ;
+
 expr        = ternary ;
-ternary     = or [ "if" or "else" ternary ] ;
+(* Тернарник: else-ветка не может начинаться с if без скобок.
+   a if c1 else b if c2 else d — ошибка парсера.
+   a if c1 else (b if c2 else d) — ок. *)
+ternary     = pipe [ "if" pipe "else" ternary ] ;
+(* Конвейер: a $ f = f(a). Лево-ассоциативно. *)
+pipe        = or { "$" or } ;
 or          = and { "or" and } ;
 and         = not { "and" not } ;
 not         = [ "not" ] comparison ;
 comparison  = concat { ( "==" | "!=" | "<" | "<=" | ">" | ">=" ) concat } ;
-concat      = add { "++" add } ;
+(* concat: ++ (конкатенация строк) и .. (композиция функций) на одном уровне,
+   лево-ассоциативно. *)
+concat      = add { ( "++" | ".." ) add } ;
 add         = mul { ( "+" | "-" ) mul } ;
 mul         = unary { ( "*" | "/" | "%" ) unary } ;
+(* unary: унарный минус и type — операторы с одинаковым приоритетом. *)
 unary       = [ "-" | "type" ] postfix ;
 postfix     = primary { "(" args ")" | "[" expr "]" | "." Ident } ;
-primary     = Number | String | "true" | "false" | "nil" | Ident
-            | "(" tuple_or_group ")" | "{" fields "}" | if_expr | match_expr
-            | lambda | for_expr | loop_expr ;
+args        = [ expr { "," expr } ] ;
+
+primary     = Number | String | "true" | "false" | "nil"
+            | Ident
+            | "(" tuple_or_group ")"
+            | "{" fields "}"
+            | if_expr | match_expr | lambda | for_expr | loop_expr ;
+
+(* (expr) — группировка; (expr, ...) или (expr,) — кортеж; () — пустой кортеж. *)
+tuple_or_group = [ expr { "," expr } [ "," ] ] ;
+
+(* fields: ключ = значение (явный) или expr (автоключ).
+   Явный ключ — имя, строка или целое число. Автоключ = max(числовые) + 1, или 0.
+   Конфликт ключей — перезапись (последняя запись выигрывает). *)
+fields      = [ field { "," field } ] ;
+field       = ( Ident | String | Number ) "=" expr   -- явный ключ
+            | expr ;                                  -- автоключ
+
+(* if: один end на всю цепочку if/elseif/else. *)
+if_expr     = "if" expr "then" block { "elseif" expr "then" block }
+              [ "else" block ] "end" ;
+
+(* match: порядок веток важен, проверяется сверху вниз. *)
+match_expr  = "match" expr { pattern [ "if" expr ] "->" block } "end" ;
+pattern     = "_" | Ident | Number | String | "true" | "false" | "nil"
+            | "(" [ pattern { "," pattern } ] ")" ;
+
+lambda      = "\\" "(" params ")" "=" block "end" ;
+
+(* for: числовой (с =) или generic (с in). *)
+for_expr    = "for" Ident "=" expr "," expr [ "," expr ] "do" block "end"
+            | "for" Ident { "," Ident } "in" expr "do" block "end" ;
+loop_expr   = "loop" block "end" ;
+
+block       = { statement } ;
 ```
