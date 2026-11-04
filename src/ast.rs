@@ -49,6 +49,13 @@ pub enum Expr {
         alias: Option<String>,
         names: UseNames,
     },
+    StructComprehension {
+        key: Box<Expr>,
+        value: Box<Expr>,
+        vars: Vec<String>,
+        iter: Box<Expr>,
+        condition: Option<Box<Expr>>,
+    },
 }
 
 #[derive(Debug, Clone)]

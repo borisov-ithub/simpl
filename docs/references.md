@@ -1,6 +1,6 @@
 # Simpl — справочник по языку
 
-Версия 2.4.0.
+Версия 2.5.0.
 
 ## 1. Общее
 
@@ -797,7 +797,51 @@ Struct даты-времени: `{ year, month, day, hour, min, sec, wday }`. `w
 Подсказка: используйте let ^x при объявлении, если значение нужно менять.
 ```
 
-## 25. Грамматика (EBNF, упрощённо)
+## 25. Comprehension (struct)
+
+Создать struct из итерации:
+
+```lua
+{ key_expr : value_expr for var in iterable }
+{ key_expr : value_expr for k, v in iterable }
+{ key_expr : value_expr for var in iterable if cond }
+```
+
+**`var`** — одна переменная: значение элемента. **`k, v`** — две: ключ и значение.
+
+`iterable` — кортеж или struct. По кортежу `k` — индекс (число), `v` — значение. По struct — `k` — ключ (число или строка, как в `for k, v in struct`), `v` — значение.
+
+**`if cond`** — фильтр: элемент пропускается, если `cond` ложно.
+
+**Ключи** приводятся к строкам (как везде в struct). Конфликт ключей — перезапись.
+
+```lua
+-- квадраты чисел 1..9
+let squares = { x: x*x for x in range(1, 10) }
+echo. squares[3]      -- 9
+echo. squares[5]      -- 25
+
+-- только чётные
+let evens = { x: x for x in range(0, 10) if x % 2 == 0 }
+echo. evens           -- { 0 = 0, 2 = 2, 4 = 4, 6 = 6, 8 = 8 }
+
+-- по struct: ключ → значение
+let person = { name = "Аня", age = 12 }
+let upper = { k: k for k, v in person }
+echo. upper           -- { age = age, name = name }
+
+-- по кортежу: индекс → значение
+let t = ("a", "b", "c")
+let indexed = { i: v for i, v in t }
+echo. indexed         -- { 0 = a, 1 = b, 2 = c }
+```
+
+**Ограничения:**
+- Только один `for` (не `for x in a for y in b`).
+- `:` — только в comprehension; для литерала с ключом — `=`.
+- `{ a: 1 }` без `for` — ошибка парсера.
+
+## 26. Грамматика (EBNF, упрощённо)
 
 ```ebnf
 (*

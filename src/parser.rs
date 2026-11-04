@@ -733,28 +733,108 @@ impl Parser {
     }
 
     fn parse_struct_inner(&mut self) -> PResult<Expr> {
-        let mut fields = Vec::new();
         self.skip_newlines();
-        if !self.check(&Token::RBrace) {
-            loop {
-                self.skip_newlines();
-                let first = self.parse_expr()?;
-                let field = if self.match_tok(&Token::Eq) {
-                    let (l, c) = self.loc();
-                    let key = expr_to_struct_key(&first)
-                        .ok_or_else(|| msg::parse_bad_struct_key(l, c))?;
-                    let v = self.parse_expr()?;
-                    StructField { key: Some(key), value: v }
-                } else {
-                    StructField { key: None, value: first }
-                };
-                fields.push(field);
-                self.skip_newlines();
-                if !self.match_tok(&Token::Comma) { break; }
-            }
+        if self.check(&Token::RBrace) {
+            self.advance();
+            return Ok(Expr::Struct(vec![]));
         }
+    
+        // Первый expr — может быть ключом comprehension или полем/автоключом
+        let first = self.parse_expr()?;
+    
+        // Если после первого expr идёт ':' — это comprehension
+        if self.match_tok(&Token::Colon) {
+            return self.parse_comp_after_colon(first);
+        }
+    
+        // Иначе — обычный литерал (как раньше)
+        let mut fields = Vec::new();
+        let field = if self.match_tok(&Token::Eq) {
+            let (l, c) = self.loc();
+            let key = expr_to_struct_key(&first)
+                .ok_or_else(|| msg::parse_bad_struct_key(l, c))?;
+            let v = self.parse_expr()?;
+            StructField { key: Some(key), value: v }
+        } else {
+            StructField { key: None, value: first }
+        };
+        fields.push(field);
+    
+        self.skip_newlines();
+        while self.match_tok(&Token::Comma) {
+            self.skip_newlines();
+            if self.check(&Token::RBrace) { break; }
+            let e = self.parse_expr()?;
+            let field = if self.match_tok(&Token::Eq) {
+                let (l, c) = self.loc();
+                let key = expr_to_struct_key(&e)
+                    .ok_or_else(|| msg::parse_bad_struct_key(l, c))?;
+                let v = self.parse_expr()?;
+                StructField { key: Some(key), value: v }
+            } else {
+                StructField { key: None, value: e }
+            };
+            fields.push(field);
+            self.skip_newlines();
+        }
+    
         self.expect(&Token::RBrace, &msg::parse_expected_rbrace())?;
         Ok(Expr::Struct(fields))
+    }
+    
+    fn parse_comp_after_colon(&mut self, key: Expr) -> PResult<Expr> {
+        let value = self.parse_expr()?;
+    
+        // Ожидаем 'for'
+        if !self.match_tok(&Token::For) {
+            let (l, c) = self.loc();
+            return Err(msg::parse_comp_expected_for(l, c, &format!("{:?}", self.peek())));
+        }
+    
+        // Переменные: одна или две через запятую
+        let mut vars = Vec::new();
+        match self.advance() {
+            Token::Ident(s) => vars.push(s),
+            other => {
+                let (l, c) = self.loc();
+                return Err(msg::parse_comp_expected_var(l, c, &format!("{:?}", other)));
+            }
+        }
+        if self.match_tok(&Token::Comma) {
+            match self.advance() {
+                Token::Ident(s) => vars.push(s),
+                other => {
+                    let (l, c) = self.loc();
+                    return Err(msg::parse_comp_expected_var(l, c, &format!("{:?}", other)));
+                }
+            }
+        }
+    
+        // 'in'
+        if !self.match_tok(&Token::In) {
+            let (l, c) = self.loc();
+            return Err(msg::parse_comp_expected_in(l, c, &format!("{:?}", self.peek())));
+        }
+    
+        let iter = self.parse_pipe()?;
+    
+        // Опциональный 'if'
+        let condition = if self.match_tok(&Token::If) {
+            Some(Box::new(self.parse_expr()?))
+        } else {
+            None
+        };
+    
+        self.skip_newlines();
+        self.expect(&Token::RBrace, &msg::parse_expected_rbrace())?;
+    
+        Ok(Expr::StructComprehension {
+            key: Box::new(key),
+            value: Box::new(value),
+            vars,
+            iter: Box::new(iter),
+            condition,
+        })
     }
 
     fn parse_if(&mut self) -> PResult<Expr> {

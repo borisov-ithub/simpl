@@ -144,6 +144,46 @@ impl Interpreter {
                 Ok(Flow::Normal(Value::Struct(Rc::new(RefCell::new(map)))))
             }
 
+            Expr::StructComprehension { key, value, vars, iter, condition } => {
+                let it = self.eval_value(iter, env)?;
+                let items: Vec<(Value, Value)> = match &it {
+                    Value::Tuple(t) => {
+                        let b = t.borrow();
+                        b.iter()
+                            .enumerate()
+                            .map(|(i, v)| (Value::Number(i as f64), v.clone()))
+                            .collect()
+                    }
+                    Value::Struct(s) => {
+                        let b = s.borrow();
+                        b.iter()
+                            .map(|(k, v)| (key_to_value(k), v.clone()))
+                            .collect()
+                    }
+                    other => return Err(msg::rt_forin_bad_iter(other.type_name())),
+                };
+                let mut map = StructMap::new();
+                for (k, v) in items {
+                    let child = Env::child(env);
+                    if vars.len() == 1 {
+                        child.borrow_mut().define_new(&vars[0], v, false)?;
+                    } else {
+                        child.borrow_mut().define_new(&vars[0], k, false)?;
+                        child.borrow_mut().define_new(&vars[1], v, false)?;
+                    }
+                    if let Some(cond) = condition {
+                        let c = self.eval_value(cond, &child)?;
+                        if !c.truthy() {
+                            continue;
+                        }
+                    }
+                    let kk = self.eval_value(key, &child)?;
+                    let vv = self.eval_value(value, &child)?;
+                    map.insert(OrderedKey(to_key_string(&kk)), vv);
+                }
+                Ok(Flow::Normal(Value::Struct(Rc::new(RefCell::new(map)))))
+            }
+
             Expr::Let { name, mutable, value } => {
                 let v = self.eval_value(value, env)?;
                 env.borrow_mut().define_new(name, v, *mutable)?;

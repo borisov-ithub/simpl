@@ -864,3 +864,29 @@ pub fn rt_flip_builtin() -> String {
     "flip(): встроенные функции не поддерживаются.\n\
      Подсказка: оберните встроенную функцию в лямбду: flip(\\(a, b) = ... end)".to_string()
 }
+
+// ============================================================
+// Struct comprehension
+// ============================================================
+
+pub fn parse_comp_expected_for(line: usize, col: usize, found: &str) -> String {
+    format!(
+        "Строка {}:{}: после ':' в comprehension ожидался 'for', встретилось {}.\n\
+         Подсказка: {{ key: value for var in iterable }} или {{ key: value for k, v in iterable }}.",
+        line, col, found
+    )
+}
+
+pub fn parse_comp_expected_var(line: usize, col: usize, found: &str) -> String {
+    format!(
+        "Строка {}:{}: в comprehension ожидалось имя переменной, встретилось {}",
+        line, col, found
+    )
+}
+
+pub fn parse_comp_expected_in(line: usize, col: usize, found: &str) -> String {
+    format!(
+        "Строка {}:{}: в comprehension ожидался 'in', встретилось {}",
+        line, col, found
+    )
+}

@@ -692,3 +692,70 @@ fn flip_builtin_error() {
 fn pipe_with_flip() {
     assert_eq!(run("let sub (a, b) = a - b end\necho. 10 $ flip(sub)(3)"), "7\n");
 }
+
+#[test]
+fn comp_basic() {
+    let src = "let squares = { x: x*x for x in range(1, 10) }\necho. squares[3], squares[5]";
+    assert_eq!(run(src), "9 25\n");
+}
+
+#[test]
+fn comp_with_if() {
+    let src = "let evens = { x: x for x in range(0, 10) if x % 2 == 0 }\necho. struct.values(evens)";
+    assert_eq!(run(src), "(0, 2, 4, 6, 8)\n");
+}
+
+#[test]
+fn comp_kv_struct() {
+    let src = "let p = { a = 1, b = 2 }\nlet m = { k: v*10 for k, v in p }\necho. m.a, m.b";
+    assert_eq!(run(src), "10 20\n");
+}
+
+#[test]
+fn comp_kv_tuple() {
+    let src = "let t = (10, 20, 30)\nlet m = { i: v for i, v in t }\necho. m[0], m[1], m[2]";
+    assert_eq!(run(src), "10 20 30\n");
+}
+
+#[test]
+fn comp_empty_result() {
+    let src = "let m = { x: x for x in range(0, 3) if x > 100 }\necho. len(m)";
+    assert_eq!(run(src), "0\n");
+}
+
+#[test]
+fn comp_overwrite() {
+    // одинаковые ключи для разных x — перезапись
+    let src = "let m = { 1: x for x in range(0, 5) }\necho. m[1]";
+    assert_eq!(run(src), "4\n");
+}
+
+#[test]
+fn comp_without_for_error() {
+    let e = run_err("let m = { a: 1 }");
+    assert!(e.contains("ожидался 'for'"), "сообщение: {}", e);
+}
+
+#[test]
+fn comp_bad_iter_error() {
+    let e = run_err("let m = { x: x for x in 42 }");
+    assert!(e.contains("кортеж или struct"), "сообщение: {}", e);
+}
+
+#[test]
+fn comp_duplicate_var_error() {
+    let e = run_err("let m = { x: x for x, x in (1, 2) }");
+    assert!(e.contains("уже объявлена"), "сообщение: {}", e);
+}
+
+#[test]
+fn literal_with_eq_still_works() {
+    let src = "let s = { a = 1, b = 2 }\necho. s.a, s.b";
+    assert_eq!(run(src), "1 2\n");
+}
+
+#[test]
+fn literal_auto_keys_still_works() {
+    let src = "let s = { 10, 20, 30 }\necho. s[0], s[2]";
+    assert_eq!(run(src), "10 30\n");
+}
