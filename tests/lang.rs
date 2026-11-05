@@ -878,3 +878,125 @@ fn bitop_overflow_error_for_exponent() {
     let e = run_err("echo. 1e20 & 1");
     assert!(e.contains("вне диапазона"), "сообщение: {}", e);
 }
+
+// ============================================================
+// checker
+// ============================================================
+
+#[test]
+fn check_undefined_var() {
+    let e = run_err("echo. x");
+    assert!(e.contains("не объявлена"), "сообщение: {}", e);
+}
+
+#[test]
+fn check_assign_undefined() {
+    let e = run_err("^x = 1");
+    assert!(e.contains("не объявлена"), "сообщение: {}", e);
+}
+
+#[test]
+fn check_assign_immutable() {
+    let e = run_err("let x = 1\n^x = 2");
+    assert!(e.contains("неизменяемая"), "сообщение: {}", e);
+}
+
+#[test]
+fn check_var_already_defined() {
+    let e = run_err("let x = 1\nlet x = 2");
+    assert!(e.contains("уже объявлена"), "сообщение: {}", e);
+}
+
+#[test]
+fn check_break_outside_loop() {
+    let e = run_err("break");
+    assert!(e.contains("break"), "сообщение: {}", e);
+}
+
+#[test]
+fn check_continue_outside_loop() {
+    let e = run_err("continue");
+    assert!(e.contains("continue"), "сообщение: {}", e);
+}
+
+#[test]
+fn check_use_unknown_module() {
+    let e = run_err("use foo (*)");
+    assert!(e.contains("неизвестная библиотека"), "сообщение: {}", e);
+}
+
+#[test]
+fn check_use_name_not_in_module() {
+    let e = run_err("use string (nosuch)");
+    assert!(e.contains("нет функции"), "сообщение: {}", e);
+}
+
+#[test]
+fn check_flip_builtin() {
+    let e = run_err("flip(len)");
+    assert!(e.contains("встроенные"), "сообщение: {}", e);
+}
+
+#[test]
+fn check_compose_non_function() {
+    let e = run_err("let f = 1 .. 2");
+    assert!(e.contains("Композиция"), "сообщение: {}", e);
+}
+
+#[test]
+fn check_too_many_args_known_fn() {
+    let e = run_err("let f (a, b) = a + b end\nf(1, 2, 3)");
+    assert!(e.contains("Слишком много"), "сообщение: {}", e);
+}
+
+#[test]
+fn check_bi_arity_too_few() {
+    let e = run_err("len()");
+    assert!(e.contains("len()"), "сообщение: {}", e);
+}
+
+#[test]
+fn check_bi_arity_too_many() {
+    let e = run_err("len(1, 2)");
+    assert!(e.contains("len()"), "сообщение: {}", e);
+}
+
+#[test]
+fn check_bi_unknown() {
+    let e = run_err("nosuch()");
+    assert!(e.contains("Неизвестная функция"), "сообщение: {}", e);
+}
+
+#[test]
+fn check_call_non_function() {
+    let e = run_err("42(1)");
+    assert!(e.contains("Нельзя вызвать"), "сообщение: {}", e);
+}
+
+#[test]
+fn check_for_step_zero() {
+    let e = run_err("for i = 1, 10, 0 do end");
+    assert!(e.contains("Шаг for"), "сообщение: {}", e);
+}
+
+#[test]
+fn check_index_out_of_bounds() {
+    let e = run_err("echo. (1, 2)[5]");
+    assert!(e.contains("вне кортежа"), "сообщение: {}", e);
+}
+
+#[test]
+fn check_import_cycle() {
+    let dir = std::env::temp_dir().join(format!("simpl_check_cycle_{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("a.spl"), "import b\nlet x = 1\n").unwrap();
+    std::fs::write(dir.join("b.spl"), "import a\nlet y = 2\n").unwrap();
+    let main_src = "import a";
+    let main_path = dir.join("main.spl");
+    std::fs::write(&main_path, main_src).unwrap();
+
+    let e = simpl::run_source_capture_with_path(main_src, Some(main_path), vec![]).expect_err("должна быть ошибка");
+    assert!(e.contains("Циклический импорт"), "сообщение: {}", e);
+
+    let _ = std::fs::remove_dir_all(&dir);
+}

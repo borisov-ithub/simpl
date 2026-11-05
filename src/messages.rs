@@ -915,3 +915,110 @@ pub fn rt_shift_too_big(op: &str, n: i64) -> String {
         op, n
     )
 }
+
+// ============================================================
+// Checker (статические ошибки)
+// ============================================================
+
+pub fn check_var_undefined(name: &str) -> String {
+    format!(
+        "Переменная '{}' не объявлена.\n\
+         Подсказка: объявите её через let {} = ...",
+        name, name
+    )
+}
+
+pub fn check_assign_undefined(name: &str) -> String {
+    format!(
+        "Переменная '{}' не объявлена.\n\
+         Подсказка: используйте let ^{} = ... для создания изменяемой переменной.",
+        name, name
+    )
+}
+
+pub fn check_assign_immutable(name: &str) -> String {
+    format!(
+        "Переменная '{}' объявлена как неизменяемая (let {}).\n\
+         Подсказка: используйте let ^{} при объявлении, если значение нужно менять.",
+        name, name, name
+    )
+}
+
+pub fn check_var_already_defined(name: &str) -> String {
+    format!(
+        "Переменная '{}' уже объявлена в этой области.\n\
+         Подсказка: используйте let ^{}, если хотите изменить значение, или другую область видимости.",
+        name, name
+    )
+}
+
+pub fn check_break_outside_loop() -> String {
+    "'break' вне цикла".to_string()
+}
+
+pub fn check_continue_outside_loop() -> String {
+    "'continue' вне цикла".to_string()
+}
+
+pub fn check_use_unknown_module(name: &str) -> String {
+    format!(
+        "'{}' — неизвестная библиотека.\n\
+         Доступные: string, math, iter, struct, tuple, file, datetime.",
+        name
+    )
+}
+
+pub fn check_use_name_not_in_module(name: &str, module: &str) -> String {
+    format!("В библиотеке '{}' нет функции '{}'.", module, name)
+}
+
+pub fn check_import_cycle(path: &str) -> String {
+    format!("Циклический импорт: {}", path)
+}
+
+pub fn check_flip_builtin() -> String {
+    "flip(): встроенные функции не поддерживаются.\n\
+     Подсказка: оберните встроенную функцию в лямбду: flip(\\(a, b) = ... end)".to_string()
+}
+
+pub fn check_flip_needs_binary(required: usize) -> String {
+    format!(
+        "flip(): ожидалась функция ровно с двумя обязательными параметрами, найдено {}.",
+        required
+    )
+}
+
+pub fn check_flip_non_function(got: &str) -> String {
+    format!("flip(): ожидалась функция, получено {}", got)
+}
+
+pub fn check_compose_non_function(got: &str) -> String {
+    format!("Композиция (..) ожидает функции, получено {}", got)
+}
+
+pub fn check_too_many_args(expected: usize, got: usize) -> String {
+    format!(
+        "Слишком много аргументов при вызове функции: ожидалось {}, передано {}",
+        expected, got
+    )
+}
+
+pub fn check_bi_arity(name: &str, expected: usize, got: usize) -> String {
+    format!("{}() ожидает {} аргумент(а/ов), передано {}", name, expected, got)
+}
+
+pub fn check_bi_unknown(name: &str) -> String {
+    format!("Неизвестная функция: {}", name)
+}
+
+pub fn check_call_non_function(got: &str) -> String {
+    format!("Нельзя вызвать значение типа {}", got)
+}
+
+pub fn check_for_step_zero() -> String {
+    "Шаг for не может быть нулём".to_string()
+}
+
+pub fn check_index_out_of_bounds(i: usize, len: usize) -> String {
+    format!("Индекс {} вне кортежа длины {}. Индексация с 0.", i, len)
+}
