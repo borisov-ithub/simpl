@@ -1000,3 +1000,100 @@ fn check_import_cycle() {
 
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn check_const_div_by_zero() {
+    let e = run_err("echo. 1 / 0");
+    assert!(e.contains("Деление на ноль"), "сообщение: {}", e);
+}
+
+#[test]
+fn check_const_mod_by_zero() {
+    let e = run_err("echo. 1 % 0");
+    assert!(e.contains("Остаток от деления на ноль"), "сообщение: {}", e);
+}
+
+#[test]
+fn check_const_arith_bad_type() {
+    let e = run_err("echo. \"a\" + 1");
+    assert!(e.contains("арифметика"), "сообщение: {}", e);
+}
+
+#[test]
+fn check_const_compare_bad_type() {
+    let e = run_err("echo. \"a\" < 1");
+    assert!(e.contains("сравнение"), "сообщение: {}", e);
+}
+
+#[test]
+fn check_const_unary_neg_type() {
+    let e = run_err("echo. -\"a\"");
+    assert!(e.contains("Унарный '-'"), "сообщение: {}", e);
+}
+
+#[test]
+fn check_const_bitop_float() {
+    let e = run_err("echo. 3.5 & 1");
+    assert!(e.contains("целое число"), "сообщение: {}", e);
+}
+
+#[test]
+fn check_const_bitop_overflow() {
+    let e = run_err("echo. 1e20 & 1");
+    assert!(e.contains("вне диапазона"), "сообщение: {}", e);
+}
+
+#[test]
+fn check_const_shift_too_big() {
+    let e = run_err("echo. 1 << 64");
+    assert!(e.contains("сдвиг на 64"), "сообщение: {}", e);
+}
+
+#[test]
+fn check_const_for_bad_type() {
+    let e = run_err("for i = \"a\", 10 do end");
+    assert!(e.contains("for: ожидалось число"), "сообщение: {}", e);
+}
+
+#[test]
+fn check_const_forin_bad_iter() {
+    let e = run_err("for v in 42 do end");
+    assert!(e.contains("for..in"), "сообщение: {}", e);
+}
+
+#[test]
+fn check_const_index_bad_type() {
+    let e = run_err("echo. (1, 2)[\"a\"]");
+    assert!(e.contains("индекс кортежа"), "сообщение: {}", e);
+}
+
+#[test]
+fn check_const_index_oob() {
+    let e = run_err("echo. (1, 2)[5]");
+    assert!(e.contains("вне кортежа"), "сообщение: {}", e);
+}
+
+#[test]
+fn check_const_short_circuit_and() {
+    // false and (1/0) — не ошибка (короткое замыкание)
+    assert_eq!(run("echo. false and (1 / 0)"), "false\n");
+}
+
+#[test]
+fn check_const_short_circuit_or() {
+    assert_eq!(run("echo. true or (1 / 0)"), "true\n");
+}
+
+#[test]
+fn check_const_ok() {
+    // литеральные выражения, валидные — выполняются
+    assert_eq!(run("echo. 1 + 2 * 3"), "7\n");
+    assert_eq!(run("echo. \"a\" ++ \"b\""), "ab\n");
+    assert_eq!(run("echo. 6 & 3, 6 | 3, 6 xor 3"), "2 7 5\n");
+    assert_eq!(run("echo. type 42"), "number\n");
+}
+
+#[test]
+fn check_const_tuple_index_ok() {
+    assert_eq!(run("echo. (10, 20, 30)[1]"), "20\n");
+}

@@ -1,11 +1,12 @@
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
-
 use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::ast::*;
 use crate::messages as msg;
+use crate::interpreter::{as_i64, as_num, values_equal};
+use crate::value::{OrderedKey, StructMap, Value};
 
 #[derive(Clone)]
 struct FnInfo {
@@ -137,6 +138,11 @@ impl Checker {
 
     // ---------- проверки ----------
     fn check_expr(&mut self, e: &Expr) -> CResult<()> {
+        // свёртка литералов
+        if let Some(res) = eval_const(e) {
+            res?;
+            return Ok(());
+        }
         match e {
             Expr::Number(_) | Expr::Str(_) | Expr::Bool(_) | Expr::Nil => Ok(()),
 
@@ -245,13 +251,23 @@ impl Checker {
             Expr::Index { target, index } => {
                 self.check_expr(target)?;
                 self.check_expr(index)?;
-                if let Expr::Tuple(elems) = target.as_ref() {
-                    if let Expr::Number(n) = index.as_ref() {
-                        if n.fract() == 0.0 && *n >= 0.0 {
-                            let i = *n as usize;
-                            if i >= elems.len() {
-                                return Err(msg::check_index_out_of_bounds(i, elems.len()));
+                if let Some(Ok(Value::Tuple(elems))) = eval_const(target) {
+                    if let Some(res) = eval_const(index) {
+                        match res {
+                            Ok(Value::Number(n)) => {
+                                if n < 0.0 || n.fract() != 0.0 {
+                                    return Err(msg::rt_index_bad_type(&format!("{}", n)));
+                                }
+                                let i = n as usize;
+                                let len = elems.borrow().len();
+                                if i >= len {
+                                    return Err(msg::check_index_out_of_bounds(i, len));
+                                }
                             }
+                            Ok(v) => {
+                                return Err(msg::rt_index_bad_type(v.type_name()));
+                            }
+                            Err(e) => return Err(e),
                         }
                     }
                 }
@@ -278,12 +294,12 @@ impl Checker {
             }
 
             Expr::ForNum { var, from, to, step, body } => {
-                self.check_expr(from)?;
-                self.check_expr(to)?;
+                self.check_for_number(from)?;
+                self.check_for_number(to)?;
                 if let Some(s) = step {
-                    self.check_expr(s)?;
-                    if let Expr::Number(n) = s.as_ref() {
-                        if *n == 0.0 {
+                    self.check_for_number(s)?;
+                    if let Some(Ok(Value::Number(n))) = eval_const(s) {
+                        if n == 0.0 {
                             return Err(msg::check_for_step_zero());
                         }
                     }
@@ -299,6 +315,13 @@ impl Checker {
 
             Expr::ForIn { vars, iter, body } => {
                 self.check_expr(iter)?;
+                if let Some(res) = eval_const(iter) {
+                    match res {
+                        Ok(Value::Tuple(_)) | Ok(Value::Struct(_)) => {}
+                        Ok(v) => return Err(msg::rt_forin_bad_iter(v.type_name())),
+                        Err(e) => return Err(e),
+                    }
+                }
                 self.push_scope();
                 let res = (|| -> CResult<()> {
                     for v in vars { self.define_var(v, false)?; }
@@ -391,6 +414,19 @@ impl Checker {
             Expr::Use { module, alias, names } => self.check_use(module, alias, names),
 
             Expr::Import { path, alias, names } => self.check_import(path, alias, names),
+        }
+    }
+
+    fn check_for_number(&mut self, e: &Expr) -> CResult<()> {
+        self.check_expr(e)?;
+        if let Some(res) = eval_const(e) {
+            match res {
+                Ok(Value::Number(_)) => Ok(()),
+                Ok(v) => Err(msg::rt_for_bad_type(v.type_name())),
+                Err(e) => Err(e),
+            }
+        } else {
+            Ok(())
         }
     }
 
@@ -669,6 +705,183 @@ fn parse_str(src: &str) -> CResult<Block> {
     let tokens = lexer.tokenize()?;
     let mut parser = crate::parser::Parser::new(tokens);
     parser.parse_program()
+}
+
+fn eval_const(e: &Expr) -> Option<Result<Value, String>> {
+    match e {
+        Expr::Number(n) => Some(Ok(Value::Number(*n))),
+        Expr::Str(s) => Some(Ok(Value::Str(s.clone()))),
+        Expr::Bool(b) => Some(Ok(Value::Bool(*b))),
+        Expr::Nil => Some(Ok(Value::Nil)),
+
+        Expr::Tuple(elems) => {
+            let mut out = Vec::new();
+            for el in elems {
+                match eval_const(el)? {
+                    Ok(v) => out.push(v),
+                    Err(e) => return Some(Err(e)),
+                }
+            }
+            Some(Ok(Value::Tuple(Rc::new(RefCell::new(out)))))
+        }
+
+        Expr::Struct(fields) => {
+            let mut map = StructMap::new();
+            let mut max_num: Option<i64> = None;
+            for f in fields {
+                let v = match eval_const(&f.value)? {
+                    Ok(v) => v,
+                    Err(e) => return Some(Err(e)),
+                };
+                let key = match &f.key {
+                    Some(k) => OrderedKey::from_str(k),
+                    None => {
+                        let k = match max_num {
+                            Some(m) => m + 1,
+                            None => 0,
+                        };
+                        OrderedKey(k.to_string())
+                    }
+                };
+                if let Ok(n) = key.0.parse::<i64>() {
+                    max_num = Some(max_num.map_or(n, |m| m.max(n)));
+                }
+                map.insert(key, v);
+            }
+            Some(Ok(Value::Struct(Rc::new(RefCell::new(map)))))
+        }
+
+        Expr::Unary { op, operand } => {
+            let v = match eval_const(operand)? {
+                Ok(v) => v,
+                Err(e) => return Some(Err(e)),
+            };
+            Some(eval_unary(*op, v))
+        }
+
+        Expr::TypeOf(operand) => {
+            let v = match eval_const(operand)? {
+                Ok(v) => v,
+                Err(e) => return Some(Err(e)),
+            };
+            Some(Ok(Value::Str(v.type_name().to_string())))
+        }
+
+        Expr::Binary { op, left, right } => {
+            let l = match eval_const(left)? {
+                Ok(v) => v,
+                Err(e) => return Some(Err(e)),
+            };
+            if let BinOp::And = op {
+                if !l.truthy() {
+                    return Some(Ok(Value::Bool(false)));
+                }
+                // l истинно — результат = truthy(r)
+                let r = match eval_const(right)? {
+                    Ok(v) => v,
+                    Err(e) => return Some(Err(e)),
+                };
+                return Some(Ok(Value::Bool(r.truthy())));
+            }
+            if let BinOp::Or = op {
+                if l.truthy() {
+                    return Some(Ok(Value::Bool(true)));
+                }
+                let r = match eval_const(right)? {
+                    Ok(v) => v,
+                    Err(e) => return Some(Err(e)),
+                };
+                return Some(Ok(Value::Bool(r.truthy())));
+            }
+            let r = match eval_const(right)? {
+                Ok(v) => v,
+                Err(e) => return Some(Err(e)),
+            };
+            Some(eval_binary(*op, l, r))
+        }
+
+        _ => None,
+    }
+}
+
+fn eval_unary(op: UnaryOp, v: Value) -> Result<Value, String> {
+    match op {
+        UnaryOp::Neg => match v {
+            Value::Number(n) => Ok(Value::Number(-n)),
+            other => Err(msg::rt_unary_neg_type(other.type_name())),
+        },
+        UnaryOp::Not => Ok(Value::Bool(!v.truthy())),
+        UnaryOp::BitNot => {
+            let n = as_i64(&v, "~")?;
+            Ok(Value::Number((!n) as f64))
+        }
+    }
+}
+
+fn eval_binary(op: BinOp, l: Value, r: Value) -> Result<Value, String> {
+    use BinOp::*;
+    match op {
+        Add | Sub | Mul | Div | Mod => {
+            let a = as_num(&l, msg::rt_arith_bad_type)?;
+            let b = as_num(&r, msg::rt_arith_bad_type)?;
+            Ok(Value::Number(match op {
+                Add => a + b,
+                Sub => a - b,
+                Mul => a * b,
+                Div => {
+                    if b == 0.0 { return Err(msg::rt_div_by_zero()); }
+                    a / b
+                }
+                Mod => {
+                    if b == 0.0 { return Err(msg::rt_mod_by_zero()); }
+                    a % b
+                }
+                _ => unreachable!(),
+            }))
+        }
+        Concat => Ok(Value::Str(format!("{}{}", l.display(), r.display()))),
+        Eq => Ok(Value::Bool(values_equal(&l, &r))),
+        NotEq => Ok(Value::Bool(!values_equal(&l, &r))),
+        Lt | LtEq | Gt | GtEq => {
+            let a = as_num(&l, msg::rt_compare_bad_type)?;
+            let b = as_num(&r, msg::rt_compare_bad_type)?;
+            Ok(Value::Bool(match op {
+                Lt => a < b,
+                LtEq => a <= b,
+                Gt => a > b,
+                GtEq => a >= b,
+                _ => unreachable!(),
+            }))
+        }
+        BitAnd | BitOr | BitXor => {
+            let a = as_i64(&l, "побитовое И/ИЛИ/XOR")?;
+            let b = as_i64(&r, "побитовое И/ИЛИ/XOR")?;
+            let result = match op {
+                BitAnd => a & b,
+                BitOr => a | b,
+                BitXor => a ^ b,
+                _ => unreachable!(),
+            };
+            Ok(Value::Number(result as f64))
+        }
+        Shl | Shr => {
+            let a = as_i64(&l, "сдвиг")?;
+            let n = as_i64(&r, "сдвиг")?;
+            if n < 0 || n >= 64 {
+                return Err(msg::rt_shift_too_big(
+                    if let BinOp::Shl = op { "<<" } else { ">>" },
+                    n,
+                ));
+            }
+            let result = match op {
+                Shl => a.wrapping_shl(n as u32),
+                Shr => a.wrapping_shr(n as u32),
+                _ => unreachable!(),
+            };
+            Ok(Value::Number(result as f64))
+        }
+        And | Or => unreachable!(),
+    }
 }
 
 // ---------- статические таблицы ----------

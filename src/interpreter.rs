@@ -1045,7 +1045,7 @@ impl Interpreter {
     }
 }
 
-fn as_i64(v: &Value, ctx: &str) -> IResult<i64> {
+pub(crate) fn as_i64(v: &Value, ctx: &str) -> IResult<i64> {
     match v {
         Value::Number(n) => {
             if !n.is_finite() || n.fract() != 0.0 {
@@ -1062,7 +1062,7 @@ fn as_i64(v: &Value, ctx: &str) -> IResult<i64> {
     }
 }
 
-fn as_num(v: &Value, msg_fn: fn(&str) -> String) -> IResult<f64> {
+pub(crate) fn as_num(v: &Value, msg_fn: fn(&str) -> String) -> IResult<f64> {
     match v {
         Value::Number(n) => Ok(*n),
         other => Err(msg_fn(other.type_name())),
@@ -1084,7 +1084,7 @@ pub(crate) fn to_key_string(v: &Value) -> String {
     }
 }
 
-fn values_equal(a: &Value, b: &Value) -> bool {
+pub(crate) fn values_equal(a: &Value, b: &Value) -> bool {
     match (a, b) {
         (Value::Nil, Value::Nil) => true,
         (Value::Number(x), Value::Number(y)) => x == y,
