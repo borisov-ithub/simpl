@@ -840,3 +840,41 @@ fn logical_vs_bitwise() {
     assert_eq!(run("echo. 1 and 2"), "true\n");
     assert_eq!(run("echo. 1 & 2"), "0\n");
 }
+
+//================================================================
+#[test]
+fn number_exp_basic() {
+    assert_eq!(run("echo. 1e2"), "100\n");
+    assert_eq!(run("echo. 1e20"), "100000000000000000000\n");
+}
+
+#[test]
+fn number_exp_fraction() {
+    assert_eq!(run("echo. 1.5e-3"), "0.0015\n");
+    assert_eq!(run("echo. 2e+3"), "2000\n");
+}
+
+#[test]
+fn number_exp_underscores() {
+    assert_eq!(run("echo. 1_000e3"), "1000000\n");
+}
+
+#[test]
+fn number_exp_not_consumed() {
+    // 1e — не экспонента, 1 и Ident("e") → ошибка "переменная e не объявлена"
+    let e = run_err("echo. 1e");
+    assert!(e.contains("не объявлена") || e.contains("перевод строки"), "сообщение: {}", e);
+}
+
+#[test]
+fn number_exp_after_hex_not_applied() {
+    // 0x1e20 — hex, не экспонента
+    assert_eq!(run("echo. 0x1e20"), "7712\n");
+}
+
+#[test]
+fn bitop_overflow_error_for_exponent() {
+    // теперь 1e20 парсится, as_i64 отвергает
+    let e = run_err("echo. 1e20 & 1");
+    assert!(e.contains("вне диапазона"), "сообщение: {}", e);
+}

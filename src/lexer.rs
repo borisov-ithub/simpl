@@ -61,6 +61,10 @@ impl Lexer {
 
     fn peek(&self) -> Option<char> { self.chars.get(self.pos).copied() }
     fn peek2(&self) -> Option<char> { self.chars.get(self.pos + 1).copied() }
+    fn peek_at(&self, offset: usize) -> Option<char> {
+        self.chars.get(self.pos + offset).copied()
+    }
+
 
     fn advance(&mut self) -> Option<char> {
         let c = self.chars.get(self.pos).copied()?;
@@ -107,7 +111,7 @@ impl Lexer {
         }
 
         if c.is_ascii_digit() {
-            // проверяем префиксы 0x, 0o, 0b
+            // префиксы 0x, 0o, 0b
             if c == '0' {
                 if let Some(next) = self.peek2() {
                     if next == 'x' || next == 'X' {
@@ -121,15 +125,7 @@ impl Lexer {
                     }
                 }
             }
-            let mut s = String::new();
-            while let Some(ch) = self.peek() {
-                if ch.is_ascii_digit() || ch == '_' || (ch == '.' && self.peek2().map_or(false, |d| d.is_ascii_digit())) {
-                    s.push(ch); self.advance();
-                } else { break; }
-            }
-            let clean = s.replace('_', "");
-            let n: f64 = clean.parse().map_err(|_| msg::lex_bad_number(&s))?;
-            return Ok(Some(Token::Number(n)));
+            return self.read_decimal_number();
         }
 
         if c.is_alphabetic() || c == '_' {
@@ -250,6 +246,52 @@ impl Lexer {
 
             other => return Err(msg::lex_unknown_char(self.line, self.col, other)),
         }))
+    }
+
+    fn read_decimal_number(&mut self) -> Result<Option<Token>, String> {
+        let mut s = String::new();
+        // мантисса: цифры, _, точка (только если после неё цифра)
+        while let Some(ch) = self.peek() {
+            if ch.is_ascii_digit() || ch == '_' {
+                s.push(ch); self.advance();
+            } else if ch == '.' && self.peek2().map_or(false, |d| d.is_ascii_digit()) {
+                s.push(ch); self.advance();
+            } else {
+                break;
+            }
+        }
+        // экспонента: e/E, опционально +/-, минимум одна цифра
+        if let Some(ch) = self.peek() {
+            if ch == 'e' || ch == 'E' {
+                // смотрим вперёд: e[+-]?[0-9]
+                let mut offset = 1;
+                if let Some(sign) = self.peek_at(offset) {
+                    if sign == '+' || sign == '-' {
+                        offset += 1;
+                    }
+                }
+                if let Some(d) = self.peek_at(offset) {
+                    if d.is_ascii_digit() {
+                        s.push('e'); self.advance();
+                        if let Some(sign) = self.peek() {
+                            if sign == '+' || sign == '-' {
+                                s.push(sign); self.advance();
+                            }
+                        }
+                        while let Some(ch) = self.peek() {
+                            if ch.is_ascii_digit() || ch == '_' {
+                                s.push(ch); self.advance();
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        let clean = s.replace('_', "");
+        let n: f64 = clean.parse().map_err(|_| msg::lex_bad_number(&s))?;
+        Ok(Some(Token::Number(n)))
     }
 
     fn read_radix_number(&mut self, radix: u32, prefix: &str) -> Result<Option<Token>, String> {

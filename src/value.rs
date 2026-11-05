@@ -97,8 +97,8 @@ impl Value {
         match self {
             Value::Nil => "nil".into(),
             Value::Number(n) => {
-                if n.fract() == 0.0 && n.is_finite() {
-                    format!("{}", *n as i64)
+                if *n == 0.0 {
+                    "0".to_string()
                 } else {
                     format!("{}", n)
                 }
