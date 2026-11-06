@@ -40,6 +40,8 @@ pub struct Checker {
     current_file: Option<PathBuf>,
     visited_imports: Rc<RefCell<HashSet<PathBuf>>>,
     import_stack: Rc<RefCell<Vec<PathBuf>>>,
+    aliases: HashMap<String, crate::types::Type>,
+    type_hints: HashMap<String, crate::types::Type>,
 }
 
 type CResult<T> = Result<T, String>;
@@ -53,6 +55,8 @@ impl Checker {
             current_file: None,
             visited_imports: Rc::new(RefCell::new(HashSet::new())),
             import_stack: Rc::new(RefCell::new(Vec::new())),
+            aliases: HashMap::new(),
+            type_hints: HashMap::new(),
         }
     }
 
@@ -87,6 +91,59 @@ impl Checker {
                 module.to_string(),
                 Symbol { mutable: false, kind: SymbolKind::Var },
             );
+        }
+    }
+
+    fn check_type_rec(&self, v: &Value, ty: &crate::types::Type, ctx: &str) -> CResult<()> {
+        use crate::types::Type;
+        match ty {
+            Type::Any => Ok(()),
+            Type::Number => match v {
+                Value::Number(_) => Ok(()),
+                _ => Err(msg::check_type_mismatch(ctx, "number", v.type_name())),
+            },
+            Type::String => match v {
+                Value::Str(_) => Ok(()),
+                _ => Err(msg::check_type_mismatch(ctx, "string", v.type_name())),
+            },
+            Type::Bool => match v {
+                Value::Bool(_) => Ok(()),
+                _ => Err(msg::check_type_mismatch(ctx, "bool", v.type_name())),
+            },
+            Type::Nil => match v {
+                Value::Nil => Ok(()),
+                _ => Err(msg::check_type_mismatch(ctx, "nil", v.type_name())),
+            },
+            Type::Struct(_, _) => match v {
+                Value::Struct(_) => Ok(()),
+                _ => Err(msg::check_type_mismatch(ctx, "struct", v.type_name())),
+            },
+            Type::Tuple(items) => match v {
+                Value::Tuple(t) => {
+                    let b = t.borrow();
+                    if b.len() != items.len() {
+                        return Err(msg::check_type_tuple_len(ctx, items.len(), b.len()));
+                    }
+                    for (i, (val, t)) in b.iter().zip(items.iter()).enumerate() {
+                        self.check_type_rec(val, t, &format!("{}[{}]", ctx, i))?;
+                    }
+                    Ok(())
+                }
+                _ => Err(msg::check_type_mismatch(ctx, "tuple", v.type_name())),
+            },
+            Type::Function(_, _) => match v {
+                Value::Function(_) | Value::Builtin(_) | Value::Flipped { .. } | Value::Composed { .. } => Ok(()),
+                _ => Err(msg::check_type_mismatch(ctx, "function", v.type_name())),
+            },
+            Type::Union(items) => {
+                for t in items {
+                    if self.check_type_rec(v, t, ctx).is_ok() {
+                        return Ok(());
+                    }
+                }
+                Err(msg::check_type_mismatch(ctx, &ty.to_string(), v.type_name()))
+            }
+            Type::Alias(_) => Ok(()),  // уже развёрнут
         }
     }
 
@@ -195,6 +252,9 @@ impl Checker {
                     _ => SymbolKind::Var,
                 };
                 self.define(name, *mutable, kind)?;
+                if let Some(hint) = self.type_hints.get(name).cloned() {
+                    self.check_hint(value, &hint, name)?;
+                }
                 Ok(())
             }
 
@@ -426,6 +486,17 @@ impl Checker {
             Expr::Use { module, alias, names } => self.check_use(module, alias, names),
 
             Expr::Import { path, alias, names } => self.check_import(path, alias, names),
+
+            Expr::Alias { name, ty } => {
+                // проверяем, что ty парсится (уже сделано в парсере)
+                // проверяем, что alias не циклический
+                let mut temp = self.aliases.clone();
+                temp.insert(name.clone(), ty.clone());
+                crate::types::resolve_type(&crate::types::Type::Alias(name.clone()), &temp)
+                    .map_err(|e| msg::check_alias_cycle(&e))?;
+                self.aliases.insert(name.clone(), ty.clone());
+                Ok(())
+            }
         }
     }
 
@@ -711,6 +782,72 @@ impl Checker {
         };
         abs.canonicalize().map_err(|_| ())
     }
+
+    pub fn with_type_hints(mut self, src: &str) -> Self {
+        self.type_hints = crate::types::parse_type_comments(src);
+        self
+    }
+
+    fn check_hint(&self, e: &Expr, ty: &crate::types::Type, ctx: &str) -> CResult<()> {
+        let resolved = crate::types::resolve_type(ty, &self.aliases)
+            .map_err(|e| msg::check_alias_unknown(&e))?;
+        if let crate::types::Type::Struct(k, v_ty) = &resolved {
+            if let Expr::Struct(fields) = e {
+                return self.check_struct_ast(fields, k.as_deref(), v_ty.as_deref(), ctx);
+            }
+        }
+        if let Some(Ok(v)) = eval_const(e) {
+            return self.check_type_rec(&v, &resolved, ctx);
+        }
+        Ok(())
+    }
+    
+    fn check_struct_ast(
+        &self,
+        fields: &[StructField],
+        k_ty: Option<&crate::types::Type>,
+        v_ty: Option<&crate::types::Type>,
+        ctx: &str,
+    ) -> CResult<()> {
+        for f in fields {
+            // проверка ключа
+            if let Some(kt) = k_ty {
+                let key_val = match &f.key {
+                    Some(StructKey::Num(n)) => Value::Number(*n as f64),
+                    Some(StructKey::Str(s)) => Value::Str(s.clone()),
+                    None => {
+                        // автоключ — всегда Num, пропускаем проверку ключа
+                        // (автоключ = max+1, всегда число)
+                        // если k_ty — string, автоключ не подходит
+                        if matches!(kt, crate::types::Type::String) {
+                            return Err(msg::check_struct_key_mismatch(
+                                ctx,
+                                "string",
+                                "number (автоключ)",
+                            ));
+                        }
+                        // проверка значения
+                        self.check_value_ast(&f.value, v_ty, &format!("{}[автоключ]", ctx))?;
+                        continue;
+                    }
+                };
+                self.check_type_rec(&key_val, kt, &format!("{}[ключ]", ctx))?;
+            }
+            // проверка значения
+            if let Some(vt) = v_ty {
+                self.check_value_ast(&f.value, Some(vt), &format!("{}[{}]", ctx, f.key.as_ref().map(|k| k.as_str()).unwrap_or_default()))?;
+            }
+        }
+        Ok(())
+    }
+    
+    fn check_value_ast(&self, e: &Expr, ty: Option<&crate::types::Type>, ctx: &str) -> CResult<()> {
+        let ty = match ty { Some(t) => t, None => return Ok(()) };
+        if let Some(Ok(v)) = eval_const(e) {
+            return self.check_type_rec(&v, ty, ctx);
+        }
+        Ok(())
+    }
 }
 
 fn parse_str(src: &str) -> CResult<Block> {
@@ -747,7 +884,7 @@ fn eval_const(e: &Expr) -> Option<Result<Value, String>> {
                     Err(e) => return Some(Err(e)),
                 };
                 let key = match &f.key {
-                    Some(k) => OrderedKey::from_str(k),
+                    Some(k) => OrderedKey::from_str(&k.as_str()),
                     None => {
                         let k = match max_num {
                             Some(m) => m + 1,
@@ -962,3 +1099,4 @@ fn literal_non_function(e: &Expr) -> Option<&'static str> {
 fn literal_type(e: &Expr) -> &'static str {
     literal_non_function(e).unwrap_or("unknown")
 }
+

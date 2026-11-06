@@ -943,7 +943,37 @@ echo. indexed         -- { 0 = a, 1 = b, 2 = c }
 - `:` — только в comprehension; для литерала с ключом — `=`.
 - `{ a: 1 }` без `for` — ошибка парсера.
 
-## 26. Грамматика (EBNF, упрощённо)
+## 26. Type hints
+
+Необязательные аннотации типов в комментариях (как в Haskell):
+
+```
+-- :: age :: number
+let age = 5
+
+-- :: add :: number -> number -> number
+let add (a, b) = a + b end
+```
+
+Формат: `-- :: name :: type`.
+
+**Типы**: `number`, `string`, `bool`, `nil`, `any`, `struct`, `struct[K]`, `struct[K, V]`, `tuple[T1, T2, ...]`, `T -> U`, `T | U`, `alias`.
+
+**Alias**:
+
+```
+alias Id = number | string
+let x: Id = 5        -- ok
+let y: Id = "abc"    -- ok
+```
+
+(Синтаксис `let x: Id` — **не** поддерживается; используйте `-- :: x :: Id`.)
+
+**Проверка**: чекер проверяет **литералы** и **известные функции**. Без аннотации — динамика, как раньше.
+
+**Циклические alias** — ошибка.
+
+## 27. Грамматика (EBNF, упрощённо)
 
 ```ebnf
 (*

@@ -1195,3 +1195,60 @@ fn method_def_star_not_supported() {
     let e = run_err("let obj = {}\nobj.f(*rest) = 1 end");
     assert!(e.contains("ожидалось выражение") || e.contains("параметр"), "сообщение: {}", e);
 }
+
+// ============================================================
+// Типы
+// ============================================================
+
+#[test]
+fn type_hint_ok() {
+    let src = "-- :: age :: number\nlet age = 5\necho. age";
+    assert_eq!(run(src), "5\n");
+}
+
+#[test]
+fn type_hint_mismatch() {
+    let src = "-- :: age :: number\nlet age = \"abc\"";
+    let e = run_err(src);
+    assert!(e.contains("ожидался тип number"), "сообщение: {}", e);
+}
+
+#[test]
+fn type_hint_union_ok() {
+    let src = "alias Id = number | string\n-- :: x :: Id\nlet x = \"abc\"\necho. x";
+    assert_eq!(run(src), "abc\n");
+}
+
+#[test]
+fn type_hint_union_mismatch() {
+    let src = "alias Id = number | string\n-- :: x :: Id\nlet x = true";
+    let e = run_err(src);
+    assert!(e.contains("ожидался тип"), "сообщение: {}", e);
+}
+
+#[test]
+fn type_hint_tuple() {
+    let src = "-- :: t :: tuple[number, string]\nlet t = (1, \"a\")\necho. t";
+    assert_eq!(run(src), "(1, a)\n");
+}
+
+#[test]
+fn type_hint_tuple_mismatch() {
+    let src = "-- :: t :: tuple[number, string]\nlet t = (1, 2)";
+    let e = run_err(src);
+    assert!(e.contains("t[1]"), "сообщение: {}", e);
+}
+
+#[test]
+fn alias_cycle_error() {
+    let src = "alias A = A";
+    let e = run_err(src);
+    assert!(e.contains("Циклический alias"), "сообщение: {}", e);
+}
+
+#[test]
+fn alias_unknown_error() {
+    let src = "alias A = Unknown\n-- :: x :: A\nlet x = 1";
+    let e = run_err(src);
+    assert!(e.contains("Неизвестный тип"), "сообщение: {}", e);
+}

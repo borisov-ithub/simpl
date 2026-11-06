@@ -127,19 +127,21 @@ impl Interpreter {
                 for f in fields {
                     let v = self.eval_value(&f.value, env)?;
                     let key = match &f.key {
-                        Some(k) => OrderedKey::from_str(k),
+                        Some(StructKey::Num(n)) => {
+                            max_num = Some(max_num.map_or(*n, |m| m.max(*n)));
+                            OrderedKey(n.to_string())
+                        }
+                        Some(StructKey::Str(s)) => OrderedKey(s.clone()),
                         None => {
                             let k = match max_num {
                                 Some(m) => m + 1,
                                 None => 0,
                             };
+                            max_num = Some(k);
                             OrderedKey(k.to_string())
                         }
                     };
-                    if let Ok(n) = key.0.parse::<i64>() {
-                        max_num = Some(max_num.map_or(n, |m| m.max(n)));
-                    }
-                    map.insert(key, v);  // перезапись при конфликте — ок
+                    map.insert(key, v);
                 }
                 Ok(Flow::Normal(Value::Struct(Rc::new(RefCell::new(map)))))
             }
@@ -483,6 +485,8 @@ impl Interpreter {
                 self.bind_names(module, alias, names, &module_name)
                     .map(|_| Flow::Normal(Value::Nil))
             }
+
+            Expr::Alias { .. } => Ok(Flow::Normal(Value::Nil)),
         }
     }
 

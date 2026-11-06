@@ -7,7 +7,7 @@ pub enum Token {
     Number(f64),
     Str(String),
     Ident(String),
-
+    Alias,
     Use, As, Import,
     Let,
     If, Elseif, Else, Then, End,
@@ -164,6 +164,7 @@ impl Lexer {
                     else { Token::Echo }
                 }
                 "xor" => Token::Xor,
+                "alias" => Token::Alias,
                 _ => Token::Ident(s),
             }));
         }

@@ -62,6 +62,7 @@ pub enum Expr {
         params: Vec<Param>,
         body: Block,
     },
+    Alias { name: String, ty: crate::types::Type },
 }
 
 #[derive(Debug, Clone)]
@@ -82,7 +83,10 @@ pub struct Param {
 }
 
 #[derive(Debug, Clone)]
-pub struct StructField { pub key: Option<String>, pub value: Expr }
+pub struct StructField {
+    pub key: Option<StructKey>,
+    pub value: Expr,
+}
 
 #[derive(Debug, Clone)]
 pub struct MatchArm { pub pattern: Pattern, pub guard: Option<Expr>, pub body: Block }
@@ -117,4 +121,19 @@ pub enum BinOp {
 pub enum AssignKey {
     Field(String),
     Index(Box<Expr>),
+}
+
+#[derive(Debug, Clone)]
+pub enum StructKey {
+    Num(i64),
+    Str(String),
+}
+
+impl StructKey {
+    pub fn as_str(&self) -> String {
+        match self {
+            StructKey::Num(n) => n.to_string(),
+            StructKey::Str(s) => s.clone(),
+        }
+    }
 }

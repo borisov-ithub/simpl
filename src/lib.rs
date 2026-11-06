@@ -7,6 +7,7 @@ pub mod lexer;
 pub mod messages;
 pub mod parser;
 pub mod repl;
+pub mod types;
 pub mod value;
 
 use std::cell::RefCell;
@@ -27,7 +28,9 @@ pub fn run_source_with_path(
     let mut parser = parser::Parser::new(tokens);
     let program = parser.parse_program()?;
 
-    let mut checker = checker::Checker::new().with_file(current_file.clone());
+    let mut checker = checker::Checker::new()
+        .with_file(current_file.clone())
+        .with_type_hints(src);
     checker.check_program(&program)?;
 
     let mut interp = interpreter::Interpreter::new();
@@ -71,7 +74,9 @@ pub fn run_source_capture_with_path(
     let mut parser = parser::Parser::new(tokens);
     let program = parser.parse_program()?;
 
-    let mut checker = checker::Checker::new().with_file(current_file.clone());
+    let mut checker = checker::Checker::new()
+        .with_file(current_file.clone())
+        .with_type_hints(src);
     checker.check_program(&program)?;
 
     let mut interp = interpreter::Interpreter::new();
@@ -98,8 +103,8 @@ pub fn check_source(src: &str) -> Result<(), String> {
     let tokens = lexer.tokenize()?;
     let mut parser = parser::Parser::new(tokens);
     let program = parser.parse_program()?;
-
-    let mut checker = checker::Checker::new();
+    let mut checker = checker::Checker::new().with_type_hints(src);
     checker.check_program(&program)?;
     Ok(())
 }
+

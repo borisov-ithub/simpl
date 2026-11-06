@@ -19,7 +19,9 @@ impl Parser {
         let mut block = Vec::new();
         self.skip_newlines();
         while !self.check(&Token::Eof) {
-            if self.check(&Token::Use) {
+            if self.check(&Token::Alias) {
+                block.push(self.parse_alias()?);
+            } else if self.check(&Token::Use) {
                 block.push(self.parse_use()?);
             } else if self.check(&Token::Import) {
                 block.push(self.parse_import()?);
@@ -1068,6 +1070,47 @@ impl Parser {
             }
         }
     }
+
+    fn parse_alias(&mut self) -> PResult<Expr> {
+        let (line, col) = self.loc();
+        self.expect(&Token::Alias, "ожидалось 'alias'")?;
+        let name = match self.advance() {
+            Token::Ident(s) => s,
+            other => {
+                return Err(msg::parse_alias_expected_name(line, col, &format!("{:?}", other)));
+            }
+        };
+        self.expect(&Token::Eq, "ожидался '=' в alias")?;
+        let ty_str = self.parse_type_string()?;
+        let ty = crate::types::parse_type_str(&ty_str).ok_or_else(|| {
+            msg::parse_alias_bad_type(line, col, &ty_str)
+        })?;
+        Ok(Expr::Alias { name, ty })
+    }
+    
+    fn parse_type_string(&mut self) -> PResult<String> {
+        let mut parts: Vec<String> = Vec::new();
+        while !self.check(&Token::Newline) && !self.check(&Token::Eof) {
+            let tok = self.advance();
+            let s = match tok {
+                Token::Ident(s) => s,
+                Token::Number(n) => format!("{}", n),
+                Token::Arrow => "->".to_string(),
+                Token::Pipe => "|".to_string(),
+                Token::LBracket => "[".to_string(),
+                Token::RBracket => "]".to_string(),
+                Token::LParen => "(".to_string(),
+                Token::RParen => ")".to_string(),
+                Token::Comma => ",".to_string(),
+                other => format!("{:?}", other),
+            };
+            parts.push(s);
+        }
+        if parts.is_empty() {
+            return Err(msg::parse_alias_expected_type(&self.loc()));
+        }
+        Ok(parts.join(" "))
+    }
 }
 
 fn decompose_assign_target(expr: Expr) -> Option<(Box<Expr>, AssignKey)> {
@@ -1078,12 +1121,12 @@ fn decompose_assign_target(expr: Expr) -> Option<(Box<Expr>, AssignKey)> {
     }
 }
 
-fn expr_to_struct_key(e: &Expr) -> Option<String> {
+fn expr_to_struct_key(e: &Expr) -> Option<StructKey> {
     match e {
-        Expr::Var(name) => Some(name.clone()),
-        Expr::Str(s) => Some(s.clone()),
+        Expr::Var(name) => Some(StructKey::Str(name.clone())),
+        Expr::Str(s) => Some(StructKey::Str(s.clone())),
         Expr::Number(n) if n.fract() == 0.0 && n.is_finite() => {
-            Some(format!("{}", *n as i64))
+            Some(StructKey::Num(*n as i64))
         }
         _ => None,
     }

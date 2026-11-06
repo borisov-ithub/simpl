@@ -1031,3 +1031,56 @@ pub fn check_for_step_zero() -> String {
 pub fn check_index_out_of_bounds(i: usize, len: usize) -> String {
     format!("Индекс {} вне кортежа длины {}. Индексация с 0.", i, len)
 }
+
+// ============================================================
+// Типы (aliases)
+// ============================================================
+
+pub fn parse_alias_expected_name(line: usize, col: usize, found: &str) -> String {
+    format!("Строка {}:{}: после 'alias' ожидалось имя типа, встретилось {}", line, col, found)
+}
+
+pub fn parse_alias_expected_type(loc: &(usize, usize)) -> String {
+    format!("Строка {}:{}: ожидался тип после '='", loc.0, loc.1)
+}
+
+pub fn parse_alias_bad_type(line: usize, col: usize, ty: &str) -> String {
+    format!("Строка {}:{}: некорректный тип '{}'", line, col, ty)
+}
+
+pub fn parse_alias_only_top_level(line: usize, col: usize) -> String {
+    format!("Строка {}:{}: 'alias' допустим только на верхнем уровне файла", line, col)
+}
+
+pub fn check_alias_cycle(name: &str) -> String {
+    format!("Циклический alias: {}", name)
+}
+
+pub fn check_alias_unknown(name: &str) -> String {
+    format!("Неизвестный тип: {}", name)
+}
+
+// ============================================================
+// Типы
+// ============================================================
+
+pub fn check_type_mismatch(ctx: &str, expected: &str, got: &str) -> String {
+    format!(
+        "{}: ожидался тип {}, получено {}",
+        ctx, expected, got
+    )
+}
+
+pub fn check_type_tuple_len(ctx: &str, expected: usize, got: usize) -> String {
+    format!(
+        "{}: ожидался кортеж длины {}, получено {}",
+        ctx, expected, got
+    )
+}
+
+pub fn check_struct_key_mismatch(ctx: &str, expected: &str, got: &str) -> String {
+    format!(
+        "{}: ключ struct ожидался типа {}, получено {}",
+        ctx, expected, got
+    )
+}
