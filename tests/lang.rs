@@ -1002,18 +1002,6 @@ fn check_import_cycle() {
 }
 
 #[test]
-fn check_const_div_by_zero() {
-    let e = run_err("echo. 1 / 0");
-    assert!(e.contains("Деление на ноль"), "сообщение: {}", e);
-}
-
-#[test]
-fn check_const_mod_by_zero() {
-    let e = run_err("echo. 1 % 0");
-    assert!(e.contains("Остаток от деления на ноль"), "сообщение: {}", e);
-}
-
-#[test]
 fn check_const_arith_bad_type() {
     let e = run_err("echo. \"a\" + 1");
     assert!(e.contains("арифметика"), "сообщение: {}", e);
@@ -1096,4 +1084,76 @@ fn check_const_ok() {
 #[test]
 fn check_const_tuple_index_ok() {
     assert_eq!(run("echo. (10, 20, 30)[1]"), "20\n");
+}
+
+// ============================================================
+// Обработка ошибок
+// ============================================================
+
+#[test]
+fn pcall_ok() {
+    let src = "let (ok, r) = pcall(\\(x) = x * 2 end, 5)\necho. ok, r";
+    assert_eq!(run(src), "true 10\n");
+}
+
+#[test]
+fn pcall_catches_div_zero() {
+    let src = "let (ok, r) = pcall(\\(x) = 10 / x end, 0)\necho. ok, r";
+    assert_eq!(run(src), "false Деление на ноль\n");
+}
+
+#[test]
+fn pcall_catches_error() {
+    let src = "let (ok, r) = pcall(\\(x) = error(\"boom\") end, 1)\necho. ok, r";
+    assert_eq!(run(src), "false boom\n");
+}
+
+#[test]
+fn pcall_does_not_stop_program() {
+    let src = "let (ok, r) = pcall(\\(x) = 1 / 0 end, 1)\necho. \"живы\", ok, r";
+    assert_eq!(run(src), "живы false Деление на ноль\n");
+}
+
+#[test]
+fn error_non_string() {
+    let src = "let (ok, r) = pcall(\\(x) = error(42) end, 1)\necho. ok, r";
+    assert_eq!(run(src), "false 42\n");
+}
+
+#[test]
+fn xpcall_ok() {
+    let src = "let (ok, r) = xpcall(\\(x) = x * 2 end, \\(e) = \"err\" end, 5)\necho. ok, r";
+    assert_eq!(run(src), "true 10\n");
+}
+
+#[test]
+fn xpcall_handler() {
+    let src = "let (ok, r) = xpcall(\\(x) = 10 / x end, \\(e) = \"поймано: \" ++ e end, 0)\necho. ok, r";
+    assert_eq!(run(src), "false поймано: Деление на ноль\n");
+}
+
+#[test]
+fn pcall_catches_type_error() {
+    let src = "let (ok, r) = pcall(\\(x) = x + \"a\" end, 1)\necho. ok, r";
+    assert_eq!(run(src), "false арифметика: ожидалось число, получено string\n");
+}
+
+#[test]
+fn div_by_zero_is_runtime_error() {
+    // 1/0 — не ошибка компиляции, runtime
+    let e = run_err("echo. 1 / 0");
+    assert!(e.contains("Деление на ноль"), "сообщение: {}", e);
+}
+
+#[test]
+fn pcall_catches_literal_div_zero() {
+    let src = "let (ok, r) = pcall(\\(x) = 1 / 0 end, 1)\necho. ok, r";
+    assert_eq!(run(src), "false Деление на ноль\n");
+}
+
+#[test]
+fn pcall_does_not_catch_compile_error() {
+    // "a" + 1 — ошибка компиляции, pcall не помогает
+    let e = run_err("let (ok, r) = pcall(\\(x) = \"a\" + 1 end, 1)");
+    assert!(e.contains("арифметика"), "сообщение: {}", e);
 }

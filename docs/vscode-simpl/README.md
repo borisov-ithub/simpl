@@ -2,7 +2,7 @@
 
 Расширение для языка программирования **Simpl** — учебного языка с Lua-подобным синтаксисом.
 
-Версия: **2.6.1**
+Версия: **3.1.0**
 
 ## Что внутри
 
@@ -99,6 +99,13 @@ echo. describe(42)
 | `\` (лямбда) | `keyword.operator.lambda.simpl` |
 | `++` | `keyword.operator.simpl` |
 | `->` | `keyword.operator.simpl` |
+| `$` | `keyword.operator.pipe.simpl` |
+| `..` | `keyword.operator.compose.simpl` |
+| `&` `\|` `~` | `keyword.operator.bitwise.simpl` |
+| `<<` `>>` | `keyword.operator.shift.simpl` |
+| `xor` | `keyword.control.simpl` |
+| `pcall`, `xpcall`, `error` | `support.function.builtin.simpl` |
+| `1e20`, `1.5e-3` | `constant.numeric.exp.simpl` |
 
 ## Известные ограничения
 

@@ -768,6 +768,12 @@ fn eval_const(e: &Expr) -> Option<Result<Value, String>> {
         }
 
         Expr::Binary { op, left, right } => {
+            // Div и Mod не сворачиваем: pcall должен ловить деление на ноль в рантайме.
+            // Но если это не Div/Mod — сворачиваем как раньше.
+            if matches!(op, BinOp::Div | BinOp::Mod) {
+                return None;
+            }
+        
             let l = match eval_const(left)? {
                 Ok(v) => v,
                 Err(e) => return Some(Err(e)),
@@ -776,7 +782,6 @@ fn eval_const(e: &Expr) -> Option<Result<Value, String>> {
                 if !l.truthy() {
                     return Some(Ok(Value::Bool(false)));
                 }
-                // l истинно — результат = truthy(r)
                 let r = match eval_const(right)? {
                     Ok(v) => v,
                     Err(e) => return Some(Err(e)),
@@ -899,6 +904,9 @@ const BUILTINS: &[(&str, (usize, usize, bool))] = &[
     ("chr", (1, 1, false)),
     ("sleep", (1, 1, false)),
     ("flip", (1, 1, false)),
+    ("pcall", (1, 1, true)),
+    ("xpcall", (2, 2, true)),
+    ("error", (1, 1, false)),
 ];
 
 fn builtin_arity(name: &str) -> Option<(usize, usize, bool)> {

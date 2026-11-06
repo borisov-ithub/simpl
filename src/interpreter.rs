@@ -751,6 +751,9 @@ impl Interpreter {
             "chr" => return self.call_chr(args),
             "sleep" => return self.call_sleep(args),
             "flip" => return self.call_flip(args),
+            "pcall" => return self.call_pcall(args),
+            "xpcall" => return self.call_xpcall(args),
+            "error" => return self.call_error(args),
             _ => {}
         }
         if let Some(rest) = name.strip_prefix("string.") {
@@ -964,6 +967,64 @@ impl Interpreter {
             Value::Flipped { .. } => Err(msg::rt_flip_non_function("flipped function")),
             other => Err(msg::rt_flip_non_function(other.type_name())),
         }
+    }
+
+    fn call_pcall(&mut self, args: Vec<Value>) -> IResult<Value> {
+        if args.is_empty() {
+            return Err(msg::bi_arity_range("pcall", 1, usize::MAX, 0));
+        }
+        let f = args[0].clone();
+        let rest: Vec<Value> = args[1..].to_vec();
+        match self.call(f, rest) {
+            Ok(v) => {
+                let pair = vec![Value::Bool(true), v];
+                Ok(Value::Tuple(Rc::new(RefCell::new(pair))))
+            }
+            Err(e) => {
+                let pair = vec![Value::Bool(false), Value::Str(e)];
+                Ok(Value::Tuple(Rc::new(RefCell::new(pair))))
+            }
+        }
+    }
+    
+    fn call_xpcall(&mut self, args: Vec<Value>) -> IResult<Value> {
+        if args.len() < 2 {
+            return Err(msg::bi_arity_range("xpcall", 2, usize::MAX, args.len()));
+        }
+        let f = args[0].clone();
+        let handler = args[1].clone();
+        let rest: Vec<Value> = args[2..].to_vec();
+        match self.call(f, rest) {
+            Ok(v) => {
+                let pair = vec![Value::Bool(true), v];
+                Ok(Value::Tuple(Rc::new(RefCell::new(pair))))
+            }
+            Err(e) => {
+                // вызываем handler(e)
+                match self.call(handler, vec![Value::Str(e.clone())]) {
+                    Ok(hv) => {
+                        let pair = vec![Value::Bool(false), hv];
+                        Ok(Value::Tuple(Rc::new(RefCell::new(pair))))
+                    }
+                    Err(he) => {
+                        // handler сам упал — возвращаем ошибку handler
+                        let pair = vec![Value::Bool(false), Value::Str(he)];
+                        Ok(Value::Tuple(Rc::new(RefCell::new(pair))))
+                    }
+                }
+            }
+        }
+    }
+    
+    fn call_error(&mut self, args: Vec<Value>) -> IResult<Value> {
+        if args.len() != 1 {
+            return Err(msg::bi_arity("error", 1, args.len()));
+        }
+        let m = match &args[0] {
+            Value::Str(s) => s.clone(),
+            other => other.display(),
+        };
+        Err(msg::rt_user_error(&m))
     }
 
     fn resolve_import_path(&self, path: &str) -> IResult<PathBuf> {

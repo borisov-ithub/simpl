@@ -382,6 +382,10 @@ pub fn use_name_not_in_module(name: &str, module: &str) -> String {
 // Библиотеки — общие
 // ============================================================
 
+pub fn rt_user_error(msg: &str) -> String {
+    msg.to_string()
+}
+
 pub fn bi_arity(name: &str, expected: usize, got: usize) -> String {
     format!("{}() ожидает {} аргумент(а/ов), передано {}", name, expected, got)
 }
