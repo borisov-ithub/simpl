@@ -80,11 +80,18 @@ impl Parser {
     }
 
     fn parse_block_until(&mut self, stops: &[Token]) -> PResult<Block> {
+        let saved_in_struct = self.in_struct;
+        self.in_struct = 0;
+        let result = self.parse_block_until_inner(stops);
+        self.in_struct = saved_in_struct;
+        result
+    }
+    
+    fn parse_block_until_inner(&mut self, stops: &[Token]) -> PResult<Block> {
         let mut block = Vec::new();
         self.skip_newlines();
         loop {
             if stops.iter().any(|s| self.check(s)) || self.check(&Token::Eof) { break; }
-    
             if self.check(&Token::Use) {
                 let (l, c) = self.loc();
                 return Err(msg::parse_use_only_top_level(l, c));
@@ -93,7 +100,6 @@ impl Parser {
                 let (l, c) = self.loc();
                 return Err(msg::parse_import_only_top_level(l, c));
             }
-    
             block.push(self.parse_expr()?);
             if stops.iter().any(|s| self.check(s)) { break; }
             if self.check(&Token::Newline) { self.skip_newlines(); }
