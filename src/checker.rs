@@ -451,7 +451,10 @@ impl Checker {
                 };
                 match &sym.kind {
                     SymbolKind::Builtin => {
-                        let (req, tot, star) = builtin_arity(name).unwrap();
+                        let (req, tot, star) = match builtin_arity(name) {
+                            Some(a) => a,
+                            None => return Ok(()),  // модульная функция — арность неизвестна
+                        };
                         let got = args.len();
                         if !star && got > tot {
                             return Err(msg::check_bi_arity(name, tot, got));
@@ -462,11 +465,9 @@ impl Checker {
                         if name == "flip" && got == 1 {
                             match &args[0] {
                                 Expr::Var(fname) => {
-                                    if let Some(fsym) = self.lookup(fname) {
-                                        match &fsym.kind {
-                                            SymbolKind::Builtin => {
-                                                return Err(msg::check_flip_builtin());
-                                            }
+                                    if let Some(sym) = self.lookup(fname) {
+                                        match &sym.kind {
+                                            SymbolKind::Builtin => return Err(msg::check_flip_builtin()),
                                             SymbolKind::Fn(fi) => {
                                                 if fi.required != 2 {
                                                     return Err(msg::check_flip_needs_binary(fi.required));

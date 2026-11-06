@@ -40,7 +40,7 @@ fn use_alias_with_list() {
 fn use_conflict_error() {
     let src = "let trim = 1\nuse string (trim)";
     let e = run_err(src);
-    assert!(e.contains("уже занято"), "сообщение: {}", e);
+    assert!(e.contains("уже объявлена"), "сообщение: {}", e);
 }
 
 #[test]

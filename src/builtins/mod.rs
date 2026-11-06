@@ -110,10 +110,6 @@ pub fn register(globals: &mut HashMap<String, (Value, bool)>) {
         ]),
     ];
 
-    if let Some((Value::Struct(s), _)) = globals.get("math") {
-        s.borrow_mut().insert(OrderedKey("pi".to_string()), Value::Number(std::f64::consts::PI));
-    }
-
     for (mod_name, fns) in modules {
         let mut fields = StructMap::new();
         for (name, full) in *fns {
@@ -121,5 +117,12 @@ pub fn register(globals: &mut HashMap<String, (Value, bool)>) {
         }
         let s = Value::Struct(Rc::new(RefCell::new(fields)));
         globals.insert(mod_name.to_string(), (s, false));
+    }
+
+    if let Some((Value::Struct(s), _)) = globals.get("math") {
+        s.borrow_mut().insert(
+            OrderedKey("pi".to_string()),
+            Value::Number(std::f64::consts::PI),
+        );
     }
 }
