@@ -428,11 +428,12 @@ impl Parser {
                 _ => unreachable!(),
             };
             self.expect(&Token::Eq, &msg::parse_expected_eq_after_caret_name())?;
+            self.skip_newlines();
             let value = self.parse_expr()?;
             return Ok(Expr::Assign { name, value: Box::new(value) });
         }
-
-        // name = expr — ошибка (нужен ^), только вне struct-литерала
+    
+        // name = expr — ошибка
         if self.in_struct == 0 {
             if let Token::Ident(_) = self.peek() {
                 if matches!(self.tokens.get(self.pos + 1).map(|t| &t.0), Some(Token::Eq)) {
@@ -441,18 +442,40 @@ impl Parser {
                 }
             }
         }
-
+    
         let (expr_line, expr_col) = self.loc();
         let expr = self.parse_ternary()?;
-
-        // Присваивание полю/индексу — только вне struct-литерала
-        if self.in_struct == 0 && self.match_tok(&Token::Eq) {
+    
+        if self.in_struct == 0 && self.check(&Token::Eq) {
+            // target.name(...) = ... end — объявление метода
+            if let Expr::Call { callee, args } = &expr {
+                if let Some((target, name)) = decompose_method_target(callee) {
+                    let params = call_args_to_params(args)?;
+                    self.advance(); // =
+                    self.skip_newlines();
+                    let body = self.parse_block_until(&[Token::End])?;
+                    self.expect_end("метод", expr_line, expr_col)?;
+                    return Ok(Expr::MethodDef {
+                        target: Box::new(target),
+                        name,
+                        params,
+                        body,
+                    });
+                }
+            }
+            // обычное присваивание полю/индексу
+            self.advance();
+            self.skip_newlines();
             let value = self.parse_expr()?;
             let (target, key) = decompose_assign_target(expr)
                 .ok_or_else(|| msg::parse_bad_assign_target(expr_line, expr_col))?;
-            return Ok(Expr::AssignField { target, key, value: Box::new(value) });
+            return Ok(Expr::AssignField {
+                target,
+                key,
+                value: Box::new(value),
+            });
         }
-
+    
         Ok(expr)
     }
 
@@ -1064,4 +1087,26 @@ fn expr_to_struct_key(e: &Expr) -> Option<String> {
         }
         _ => None,
     }
+}
+
+fn decompose_method_target(callee: &Expr) -> Option<(Expr, String)> {
+    match callee {
+        Expr::Field { target, name } => Some(((**target).clone(), name.clone())),
+        _ => None,
+    }
+}
+
+fn call_args_to_params(args: &[Expr]) -> PResult<Vec<Param>> {
+    let mut params = Vec::new();
+    for a in args {
+        match a {
+            Expr::Var(name) => params.push(Param {
+                name: name.clone(),
+                star: false,
+                default: None,
+            }),
+            _ => return Err(msg::parse_method_param_not_var()),
+        }
+    }
+    Ok(params)
 }

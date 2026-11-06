@@ -1157,3 +1157,41 @@ fn pcall_does_not_catch_compile_error() {
     let e = run_err("let (ok, r) = pcall(\\(x) = \"a\" + 1 end, 1)");
     assert!(e.contains("арифметика"), "сообщение: {}", e);
 }
+
+// -------------------------------
+#[test]
+fn method_def_basic() {
+    let src = "let Rectangle (w, h) =\n    let self = {}\n    self.area() = w * h end\n    self\nend\nlet r = Rectangle(10, 5)\necho. r.area()";
+    assert_eq!(run(src), "50\n");
+}
+
+#[test]
+fn method_def_no_params() {
+    let src = "let obj = {}\nobj.greet() = \"hi\" end\necho. obj.greet()";
+    assert_eq!(run(src), "hi\n");
+}
+
+#[test]
+fn method_def_with_params() {
+    let src = "let obj = {}\nobj.add(x, y) = x + y end\necho. obj.add(3, 4)";
+    assert_eq!(run(src), "7\n");
+}
+
+#[test]
+fn method_def_nested() {
+    let src = "let outer = {}\nouter.inner = {}\nouter.inner.f() = 42 end\necho. outer.inner.f()";
+    assert_eq!(run(src), "42\n");
+}
+
+#[test]
+fn method_def_param_not_var_error() {
+    let e = run_err("let obj = {}\nobj.f(1) = 1 end");
+    assert!(e.contains("именем переменной"), "сообщение: {}", e);
+}
+
+#[test]
+fn method_def_star_not_supported() {
+    // *rest не парсится в Call, ошибка парсера
+    let e = run_err("let obj = {}\nobj.f(*rest) = 1 end");
+    assert!(e.contains("ожидалось выражение") || e.contains("параметр"), "сообщение: {}", e);
+}

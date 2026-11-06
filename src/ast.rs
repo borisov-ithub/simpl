@@ -56,6 +56,12 @@ pub enum Expr {
         iter: Box<Expr>,
         condition: Option<Box<Expr>>,
     },
+    MethodDef {
+        target: Box<Expr>,
+        name: String,
+        params: Vec<Param>,
+        body: Block,
+    },
 }
 
 #[derive(Debug, Clone)]

@@ -224,6 +224,18 @@ impl Checker {
                 Ok(())
             }
 
+            Expr::MethodDef { target, name, params, body } => {
+                self.check_expr(target)?;
+                let _ = name;
+                self.push_scope();
+                let res = (|| -> CResult<()> {
+                    for p in params { self.define_var(&p.name, false)?; }
+                    self.check_block(body)
+                })();
+                self.pop_scope();
+                res
+            }
+
             Expr::Unary { operand, .. } | Expr::TypeOf(operand) => self.check_expr(operand),
 
             Expr::Binary { left, right, .. } => {

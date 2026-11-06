@@ -230,6 +230,24 @@ impl Interpreter {
                 }
             }
 
+            Expr::MethodDef { target, name, params, body } => {
+                let t = self.eval_value(target, env)?;
+                let func = Function {
+                    params: params.clone(),
+                    body: body.clone(),
+                    env: env.clone(),
+                    bound: Vec::new(),
+                };
+                let v = Value::Function(Rc::new(func));
+                match t {
+                    Value::Struct(s) => {
+                        s.borrow_mut().insert(OrderedKey::from_str(name), v);
+                        Ok(Flow::Normal(Value::Nil))
+                    }
+                    other => Err(msg::rt_assign_field_not_struct(other.type_name())),
+                }
+            }
+
             Expr::Unary { op, operand } => {
                 let v = self.eval_value(operand, env)?;
                 match op {
